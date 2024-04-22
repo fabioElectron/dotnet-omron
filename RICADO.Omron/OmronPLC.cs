@@ -602,6 +602,38 @@ namespace RICADO.Omron
             };
         }
 
+        public async Task<ReadOperatingModeResult> ReadOperatingModeAsync(CancellationToken cancellationToken)
+        {
+            lock (_isInitializedLock)
+            {
+                if (_isInitialized == false)
+                {
+                    throw new OmronException("This Omron PLC must be Initialized first before any Requests can be Processed");
+                }
+            }
+
+            ReadOperatingModeRequest request = ReadOperatingModeRequest.CreateNew(this);
+
+            ProcessRequestResult requestResult = await _channel.ProcessRequestAsync(request, _timeout, _retries, cancellationToken);
+
+            ReadOperatingModeResponse.OperatingModeResult result = ReadOperatingModeResponse.ExtractOperatingMode(request, requestResult.Response);
+
+            return new ReadOperatingModeResult
+            {
+                BytesSent = requestResult.BytesSent,
+                PacketsSent = requestResult.PacketsSent,
+                BytesReceived = requestResult.BytesReceived,
+                PacketsReceived = requestResult.PacketsReceived,
+                Duration = requestResult.Duration,
+                Status = result.Status,
+                Mode = result.Mode,
+                FatalErrorData = result.FatalErrorData,
+                NonFatalErrorData = result.NonFatalErrorData,
+                ErrorCode = result.ErrorCode,
+                ErrorMessage = result.ErrorMessage
+            };
+        }
+
         #endregion
 
 
