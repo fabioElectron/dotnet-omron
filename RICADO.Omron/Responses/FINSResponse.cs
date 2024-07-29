@@ -152,21 +152,21 @@ namespace RICADO.Omron.Responses
 
             if (response.SubFunctionCode != request.SubFunctionCode)
             {
-                throw new FINSException("Unexpected Sub Function Code '" + getSubFunctionCodeName(response.FunctionCode, response.SubFunctionCode) + "' - Expecting '" + getSubFunctionCodeName(request.FunctionCode, request.SubFunctionCode) + "'");
+                throw new FINSException("Unexpected Sub Function Code '" + GetSubFunctionCodeName(response.FunctionCode, response.SubFunctionCode) + "' - Expecting '" + GetSubFunctionCodeName(request.FunctionCode, request.SubFunctionCode) + "'");
             }
 
             byte[] responseCode = message.Slice(HEADER_LENGTH + COMMAND_LENGTH, RESPONSE_CODE_LENGTH).ToArray();
 
-            if(hasNetworkRelayError(responseCode[0]))
+            if(HasNetworkRelayError(responseCode[0]))
             {
                 throw new FINSException("A Network Relay Error has occurred");
             }
 
-            response.MainResponseCode = getMainResponseCode(responseCode[0]);
+            response.MainResponseCode = GetMainResponseCode(responseCode[0]);
 
-            response.SubResponseCode = getSubResponseCode(responseCode[1]);
+            response.SubResponseCode = GetSubResponseCode(responseCode[1]);
 
-            throwIfResponseError(response.MainResponseCode, response.SubResponseCode);
+            ThrowIfResponseError(response.MainResponseCode, response.SubResponseCode);
 
             if(request.ServiceID != response.ServiceID)
             {
@@ -235,7 +235,7 @@ namespace RICADO.Omron.Responses
 
         #region Private Methods
 
-        private static string getSubFunctionCodeName(byte functionCode, byte subFunctionCode)
+        private static string GetSubFunctionCodeName(byte functionCode, byte subFunctionCode)
         {
             switch ((enFunctionCode)functionCode)
             {
@@ -282,26 +282,26 @@ namespace RICADO.Omron.Responses
             return "Unknown";
         }
 
-        private static bool hasNetworkRelayError(byte responseCode)
+        private static bool HasNetworkRelayError(byte responseCode)
         {
             return (responseCode & (1 << 7)) != 0;
         }
 
-        private static byte getMainResponseCode(byte value)
+        private static byte GetMainResponseCode(byte value)
         {
             byte ignoredBits = 0x80;
 
             return (byte)(value & (byte)~ignoredBits);
         }
 
-        private static byte getSubResponseCode(byte value)
+        private static byte GetSubResponseCode(byte value)
         {
             byte ignoredBits = 0xC0;
 
             return (byte)(value & (byte)~ignoredBits);
         }
 
-        private static void throwIfResponseError(byte mainCode, byte subCode)
+        private static void ThrowIfResponseError(byte mainCode, byte subCode)
         {
             if(mainCode == 0 && subCode == 0)
             {

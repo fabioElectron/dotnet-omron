@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace RICADO.Omron
+﻿namespace RICADO.Omron
 {
     public enum enConnectionMethod
     {
@@ -45,6 +39,10 @@ namespace RICADO.Omron
         Work = 0xB1,
         Holding = 0xB2,
         Auxiliary = 0xB3,
+        ExtendedMemoryBank0 = 0xA0, // 0x50 on CJ2
+        ExtendedMemoryBank1 = 0xA1, // 0x51 on CJ2
+        ExtendedMemoryBank2 = 0xA2, // 0x52 on CJ2
+        ExtendedMemoryBank3 = 0xA3, // 0x53 on CJ2
     }
 
     internal enum enFunctionCode : byte

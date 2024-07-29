@@ -375,6 +375,8 @@ namespace RICADO.Omron
                 PacketsReceived = requestResult.PacketsReceived,
                 Duration = requestResult.Duration,
                 Values = ReadMemoryAreaWordResponse.ExtractValues(request, requestResult.Response),
+                MainResponseCode = requestResult.Response.MainResponseCode,
+                SubResponseCode = requestResult.Response.SubResponseCode
             };
         }
 
@@ -482,6 +484,8 @@ namespace RICADO.Omron
                 BytesReceived = requestResult.BytesReceived,
                 PacketsReceived = requestResult.PacketsReceived,
                 Duration = requestResult.Duration,
+                MainResponseCode = requestResult.Response.MainResponseCode,
+                SubResponseCode = requestResult.Response.SubResponseCode
             };
         }
 
@@ -634,6 +638,23 @@ namespace RICADO.Omron
             };
         }
 
+        public int GetAreaSize(enMemoryWordDataType area)
+        {
+            return area switch
+            {
+                enMemoryWordDataType.DataMemory => (_plcType == enPLCType.NX1P2 ? 16000 : 32768),
+                enMemoryWordDataType.CommonIO => 6144,
+                enMemoryWordDataType.Work => 512,
+                enMemoryWordDataType.Holding => 1536,//TODO FB 512
+                enMemoryWordDataType.Auxiliary => (_plcType == enPLCType.CJ2 ? 11536 : 960),
+                enMemoryWordDataType.ExtendedMemoryBank0 => 32768,
+                enMemoryWordDataType.ExtendedMemoryBank1 => 32768,
+                enMemoryWordDataType.ExtendedMemoryBank2 => 32768,
+                enMemoryWordDataType.ExtendedMemoryBank3 => 32768,
+                _ => 0,
+            };
+        }
+
         #endregion
 
 
@@ -643,11 +664,11 @@ namespace RICADO.Omron
         {
             return dataType switch
             {
-                enMemoryBitDataType.DataMemory => address < (_plcType == enPLCType.NX1P2 ? 16000 : 32768),
-                enMemoryBitDataType.CommonIO => address < 6144,
-                enMemoryBitDataType.Work => address < 512,
-                enMemoryBitDataType.Holding => address < 1536,
-                enMemoryBitDataType.Auxiliary => address < (_plcType == enPLCType.CJ2 ? 11536 : 960),
+                enMemoryBitDataType.DataMemory => address < GetAreaSize(enMemoryWordDataType.DataMemory),
+                enMemoryBitDataType.CommonIO => address < GetAreaSize(enMemoryWordDataType.CommonIO),
+                enMemoryBitDataType.Work => address < GetAreaSize(enMemoryWordDataType.Work),
+                enMemoryBitDataType.Holding => address < GetAreaSize(enMemoryWordDataType.Holding),
+                enMemoryBitDataType.Auxiliary => address < GetAreaSize(enMemoryWordDataType.Auxiliary),
                 _ => false,
             };
         }
@@ -669,11 +690,15 @@ namespace RICADO.Omron
         {
             return dataType switch
             {
-                enMemoryWordDataType.DataMemory => startAddress + (length - 1) < (_plcType == enPLCType.NX1P2 ? 16000 : 32768),
-                enMemoryWordDataType.CommonIO => startAddress + (length - 1) < 6144,
-                enMemoryWordDataType.Work => startAddress + (length - 1) < 512,
-                enMemoryWordDataType.Holding => startAddress + (length - 1) < 1536,
-                enMemoryWordDataType.Auxiliary => startAddress + (length - 1) < (_plcType == enPLCType.CJ2 ? 11536 : 960),
+                enMemoryWordDataType.DataMemory => startAddress + (length - 1) < GetAreaSize(dataType),
+                enMemoryWordDataType.CommonIO => startAddress + (length - 1) < GetAreaSize(dataType),
+                enMemoryWordDataType.Work => startAddress + (length - 1) < GetAreaSize(dataType),
+                enMemoryWordDataType.Holding => startAddress + (length - 1) < GetAreaSize(dataType),
+                enMemoryWordDataType.Auxiliary => startAddress + (length - 1) < GetAreaSize(dataType),
+                enMemoryWordDataType.ExtendedMemoryBank0 => startAddress + (length - 1) < GetAreaSize(dataType),
+                enMemoryWordDataType.ExtendedMemoryBank1 => startAddress + (length - 1) < GetAreaSize(dataType),
+                enMemoryWordDataType.ExtendedMemoryBank2 => startAddress + (length - 1) < GetAreaSize(dataType),
+                enMemoryWordDataType.ExtendedMemoryBank3 => startAddress + (length - 1) < GetAreaSize(dataType),
                 _ => false,
             };
         }
@@ -687,6 +712,10 @@ namespace RICADO.Omron
                 enMemoryWordDataType.Work => true,
                 enMemoryWordDataType.Holding => true,
                 enMemoryWordDataType.Auxiliary => !IsNSeries,
+                enMemoryWordDataType.ExtendedMemoryBank0 => true,
+                enMemoryWordDataType.ExtendedMemoryBank1 => true,
+                enMemoryWordDataType.ExtendedMemoryBank2 => true,
+                enMemoryWordDataType.ExtendedMemoryBank3 => true,
                 _ => false,
             };
         }

@@ -10,5 +10,7 @@ namespace RICADO.Omron
         public int PacketsReceived;
         public double Duration;
         public Int16[] Values;
+        public byte MainResponseCode;
+        public byte SubResponseCode;
     }
 }
