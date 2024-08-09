@@ -54,7 +54,7 @@ namespace RICADO.Omron.Channels
         {
             _remoteHost = remoteHost;
             _port = port;
-            
+
             _semaphore = new SemaphoreSlim(1, 1);
         }
 
@@ -74,7 +74,7 @@ namespace RICADO.Omron.Channels
         #region Internal Methods
 
         internal abstract Task InitializeAsync(int timeout, CancellationToken cancellationToken);
-        
+
         internal async Task<ProcessRequestResult> ProcessRequestAsync(FINSRequest request, int timeout, int retries, CancellationToken cancellationToken)
         {
             int attempts = 0;
@@ -100,7 +100,7 @@ namespace RICADO.Omron.Channels
                     }
 
                     // Build the Request into a Message we can Send
-                    ReadOnlyMemory<byte> requestMessage = request.BuildMessage(getNextRequestId());
+                    ReadOnlyMemory<byte> requestMessage = request.BuildMessage(GetNextRequestId());
 
                     // Send the Message
                     SendMessageResult sendResult = await SendMessageAsync(requestMessage, timeout, cancellationToken);
@@ -119,7 +119,7 @@ namespace RICADO.Omron.Channels
                 }
                 catch (Exception)
                 {
-                    if(attempts >= retries)
+                    if (attempts >= retries)
                     {
                         throw;
                     }
@@ -147,7 +147,7 @@ namespace RICADO.Omron.Channels
             }
             catch (FINSException e)
             {
-                if(e.Message.Contains("Service ID") && responseMessage.Length >= 9 && responseMessage.Span[9] != request.ServiceID)
+                if (e.Message.Contains("Service ID") && responseMessage.Length >= 9 && responseMessage.Span[9] != request.ServiceID)
                 {
                     if (!_semaphore.Wait(0))
                     {
@@ -189,7 +189,7 @@ namespace RICADO.Omron.Channels
 
         #region Private Methods
 
-        private byte getNextRequestId()
+        private byte GetNextRequestId()
         {
             if (_requestId == byte.MaxValue)
             {
