@@ -16,7 +16,7 @@ namespace RICADO.Omron.Channels
 
         private byte _requestId = 0;
         private TcpClient _client;
-        private SemaphoreSlim _semaphore;
+        private object _lock = new object();
 
         internal string RemoteHost { get; }
         internal int Port { get; }
@@ -29,13 +29,10 @@ namespace RICADO.Omron.Channels
         {
             RemoteHost = remoteHost;
             Port = port;
-
-            _semaphore = new SemaphoreSlim(1, 1);
         }
 
         public void Dispose()
         {
-            _semaphore?.Dispose();
             DestroyClient();
         }
 
@@ -45,20 +42,29 @@ namespace RICADO.Omron.Channels
 
         internal async Task InitializeAsync(int timeout, CancellationToken cancellationToken)
         {
-            if (!_semaphore.Wait(0))
-            {
-                await _semaphore.WaitAsync(cancellationToken);
-            }
-
+            bool lockTaken = false;
+            Monitor.Enter(_lock, ref lockTaken);
             try
             {
                 DestroyClient();
-
                 await InitializeClient(timeout, cancellationToken);
+            }
+            catch (ObjectDisposedException)
+            {
+                throw new OmronException("Failed to Re-Connect to Omron PLC '" + RemoteHost + ":" + Port + "' - The underlying Socket Connection was Closed");
+            }
+            catch (TimeoutException)
+            {
+                throw new OmronException("Failed to Re-Connect within the Timeout Period to Omron PLC '" + RemoteHost + ":" + Port + "'");
+            }
+            catch (System.Net.Sockets.SocketException e)
+            {
+                throw new OmronException("Failed to Re-Connect to Omron PLC '" + RemoteHost + ":" + Port + "'", e);
             }
             finally
             {
-                _semaphore.Release();
+                if (lockTaken)
+                    Monitor.Exit(_lock);
             }
         }
 
@@ -74,16 +80,13 @@ namespace RICADO.Omron.Channels
 
             while (attempts <= retries)
             {
-                if (!_semaphore.Wait(0))
-                {
-                    await _semaphore.WaitAsync(cancellationToken);
-                }
-
+                bool lockTaken = false;
+                Monitor.Enter(_lock, ref lockTaken);
                 try
                 {
                     if (attempts > 0)
                     {
-                        await DestroyAndInitializeClient(timeout, cancellationToken);
+                        await InitializeAsync(timeout, cancellationToken);
                     }
 
                     // Build the Request into a Message we can Send
@@ -113,7 +116,8 @@ namespace RICADO.Omron.Channels
                 }
                 finally
                 {
-                    _semaphore.Release();
+                    if (lockTaken)
+                        Monitor.Exit(_lock);
                 }
 
                 // Increment the Attempts
@@ -136,21 +140,16 @@ namespace RICADO.Omron.Channels
             {
                 if (e.Message.Contains("Service ID") && responseMessage.Length >= 9 && responseMessage.Span[9] != request.ServiceID)
                 {
-                    if (!_semaphore.Wait(0))
-                    {
-                        await _semaphore.WaitAsync(cancellationToken);
-                    }
-
+                    bool lockTaken = false;
+                    Monitor.Enter(_lock, ref lockTaken);
                     try
                     {
                         await PurgeReceiveBuffer(timeout, cancellationToken);
                     }
-                    catch
-                    {
-                    }
                     finally
                     {
-                        _semaphore.Release();
+                        if (lockTaken)
+                            Monitor.Exit(_lock);
                     }
                 }
 
@@ -210,28 +209,6 @@ namespace RICADO.Omron.Channels
             catch (OmronException e)
             {
                 throw new OmronException("Failed to Negotiate a TCP Connection with Omron PLC '" + RemoteHost + ":" + Port + "'", e);
-            }
-        }
-
-        private async Task DestroyAndInitializeClient(int timeout, CancellationToken cancellationToken)
-        {
-            DestroyClient();
-
-            try
-            {
-                await InitializeClient(timeout, cancellationToken);
-            }
-            catch (ObjectDisposedException)
-            {
-                throw new OmronException("Failed to Re-Connect to Omron PLC '" + RemoteHost + ":" + Port + "' - The underlying Socket Connection was Closed");
-            }
-            catch (TimeoutException)
-            {
-                throw new OmronException("Failed to Re-Connect within the Timeout Period to Omron PLC '" + RemoteHost + ":" + Port + "'");
-            }
-            catch (System.Net.Sockets.SocketException e)
-            {
-                throw new OmronException("Failed to Re-Connect to Omron PLC '" + RemoteHost + ":" + Port + "'", e);
             }
         }
 
