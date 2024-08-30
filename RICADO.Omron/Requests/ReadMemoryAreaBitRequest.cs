@@ -1,122 +1,24 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-
-namespace RICADO.Omron.Requests
+﻿namespace RICADO.Omron.Requests
 {
     internal class ReadMemoryAreaBitRequest : FINSRequest
     {
-        #region Private Properties
 
-        private ushort _address;
-        private byte _startBitIndex;
-        private ushort _length;
-        private enMemoryBitDataType _dataType;
+        internal readonly ushort Length;
 
-        #endregion
-
-
-        #region Internal Properties
-
-        internal ushort Address
+        public ReadMemoryAreaBitRequest(OmronPLC plc, ushort address, byte startBitIndex, ushort length, MemoryBitDataType dataType)
+            : base(plc, (byte)FunctionCodes.MemoryArea, (byte)MemoryAreaFunctionCodes.Read)
         {
-            get
-            {
-                return _address;
-            }
-            set
-            {
-                _address = value;
-            }
-        }
-
-        internal byte StartBitIndex
-        {
-            get
-            {
-                return _startBitIndex;
-            }
-            set
-            {
-                _startBitIndex = value;
-            }
-        }
-
-        internal ushort Length
-        {
-            get
-            {
-                return _length;
-            }
-            set
-            {
-                _length = value;
-            }
-        }
-
-        internal enMemoryBitDataType DataType
-        {
-            get
-            {
-                return _dataType;
-            }
-            set
-            {
-                _dataType = value;
-            }
-        }
-
-        #endregion
-
-
-        #region Constructor
-
-        private ReadMemoryAreaBitRequest(OmronPLC plc) : base(plc)
-        {
-        }
-
-        #endregion
-
-
-        #region Internal Methods
-
-        internal static ReadMemoryAreaBitRequest CreateNew(OmronPLC plc, ushort address, byte startBitIndex, ushort length, enMemoryBitDataType dataType)
-        {
-            return new ReadMemoryAreaBitRequest(plc)
-            {
-                FunctionCode = (byte)enFunctionCode.MemoryArea,
-                SubFunctionCode = (byte)enMemoryAreaFunctionCode.Read,
-                Address = address,
-                StartBitIndex = startBitIndex,
-                Length = length,
-                DataType = dataType,
-            };
-        }
-
-        #endregion
-
-
-        #region Protected Methods
-
-        protected override List<byte> BuildRequestData()
-        {
-            List<byte> data = new List<byte>();
-
-            // Memory Area Data Type
-            data.Add((byte)_dataType);
-
+            Length = length;
+            Body = new byte[6];
+            Body[0] = (byte)dataType;// Memory Area Data Type
             // Address
-            data.AddRange(BitConverter.GetBytes(_address).Reverse());
-
-            // Bit Index
-            data.Add(_startBitIndex);
-
+            Body[1] = (byte)(address >> 8);
+            Body[2] = (byte)(address & 0x00FF);
+            Body[3] = startBitIndex;// Bit Index
             // Length
-            data.AddRange(BitConverter.GetBytes(_length).Reverse());
-
-            return data;
+            Body[4] = (byte)(length >> 8);
+            Body[5] = (byte)(length & 0x00FF);
         }
 
-        #endregion
     }
 }

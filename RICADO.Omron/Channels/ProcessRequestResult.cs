@@ -1,9 +1,8 @@
-﻿using System;
-using RICADO.Omron.Responses;
+﻿using RICADO.Omron.Responses;
 
 namespace RICADO.Omron.Channels
 {
-    internal struct ProcessRequestResult
+    internal class ProcessRequestResult
     {
         internal int BytesSent;
         internal int PacketsSent;

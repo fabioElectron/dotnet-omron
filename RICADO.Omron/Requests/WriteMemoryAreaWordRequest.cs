@@ -1,114 +1,28 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-
-namespace RICADO.Omron.Requests
+﻿namespace RICADO.Omron.Requests
 {
     internal class WriteMemoryAreaWordRequest : FINSRequest
     {
-        #region Private Properties
 
-        private ushort _startAddress;
-        private enMemoryWordDataType _dataType;
-        private short[] _values;
-
-        #endregion
-
-
-        #region Internal Properties
-
-        internal ushort StartAddress
+        public WriteMemoryAreaWordRequest(OmronPLC plc, ushort address, MemoryWordDataType dataType, ushort[] values)
+            : base(plc, (byte)FunctionCodes.MemoryArea, (byte)MemoryAreaFunctionCodes.Write)
         {
-            get
-            {
-                return _startAddress;
-            }
-            set
-            {
-                _startAddress = value;
-            }
-        }
-
-        internal enMemoryWordDataType DataType
-        {
-            get
-            {
-                return _dataType;
-            }
-            set
-            {
-                _dataType = value;
-            }
-        }
-
-        internal short[] Values
-        {
-            get
-            {
-                return _values;
-            }
-            set
-            {
-                _values = value;
-            }
-        }
-
-        #endregion
-
-
-        #region Constructor
-
-        private WriteMemoryAreaWordRequest(OmronPLC plc) : base(plc)
-        {
-        }
-
-        #endregion
-
-
-        #region Internal Methods
-
-        internal static WriteMemoryAreaWordRequest CreateNew(OmronPLC plc, ushort startAddress, enMemoryWordDataType dataType, short[] values)
-        {
-            return new WriteMemoryAreaWordRequest(plc)
-            {
-                FunctionCode = (byte)enFunctionCode.MemoryArea,
-                SubFunctionCode = (byte)enMemoryAreaFunctionCode.Write,
-                StartAddress = startAddress,
-                DataType = dataType,
-                Values = values,
-            };
-        }
-
-        #endregion
-
-
-        #region Protected Methods
-
-        protected override List<byte> BuildRequestData()
-        {
-            List<byte> data = new List<byte>();
-
-            // Memory Area Data Type
-            data.Add((byte)_dataType);
-
+            Body = new byte[6 + 2 * values.Length];
+            Body[0] = (byte)dataType;// Memory Area Data Type
             // Address
-            data.AddRange(BitConverter.GetBytes(_startAddress).Reverse());
-
-            // Reserved
-            data.Add(0);
-
+            Body[1] = (byte)(address >> 8);
+            Body[2] = (byte)(address & 0x00FF);
+            Body[3] = 0x00;// Reserved
             // Length
-            data.AddRange(BitConverter.GetBytes((ushort)_values.Length).Reverse());
-
+            ushort length = (ushort)values.Length;
+            Body[4] = (byte)(length >> 8);
+            Body[5] = (byte)(length & 0x00FF);
             // Word Values
-            foreach(short value in _values)
+            for (int i = 0; i < values.Length; i++)
             {
-                data.AddRange(BitConverter.GetBytes(value).Reverse());
+                Body[6 + i * 2] = (byte)(values[i] >> 8);
+                Body[6 + i * 2 + 1] = (byte)(values[i] & 0x00FF);
             }
-
-            return data;
         }
 
-        #endregion
     }
 }

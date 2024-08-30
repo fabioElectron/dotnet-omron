@@ -3,113 +3,51 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using RICADO.Sockets;
+using RICADO.Omron.Requests;
 using RICADO.Omron.Responses;
+using RICADO.Sockets;
 
 namespace RICADO.Omron.Channels
 {
-    internal class EthernetTCPChannel : EthernetChannel
+    internal sealed class EthernetTCPChannel : IDisposable
     {
-        #region Enums
-
-        internal enum enTCPCommandCode : byte
-        {
-            NodeAddressToPLC = 0,
-            NodeAddressFromPLC = 1,
-            FINSFrame = 2,
-        }
-
-        #endregion
-
-
-        #region Constants
 
         internal const int TCP_HEADER_LENGTH = 16;
 
-        #endregion
-
-
-        #region Private Properties
-
+        private byte _requestId = 0;
         private TcpClient _client;
+        private object _lock = new object();
 
-        private byte _localNodeId;
-        private byte _remoteNodeId;
+        internal string RemoteHost { get; }
+        internal int Port { get; }
+        internal byte LocalNodeID { get; private set; }
+        internal byte RemoteNodeID { get; private set; }
 
-        #endregion
+        #region ctor and dispose
 
-
-        #region Internal Properties
-
-        internal byte LocalNodeID => _localNodeId;
-
-        internal byte RemoteNodeID => _remoteNodeId;
-
-        #endregion
-
-
-        #region Constructors
-
-        internal EthernetTCPChannel(string remoteHost, int port) : base(remoteHost, port)
+        public EthernetTCPChannel(string remoteHost, int port)
         {
+            RemoteHost = remoteHost;
+            Port = port;
+        }
+
+        public void Dispose()
+        {
+            DestroyClient();
         }
 
         #endregion
 
+        #region internal methods
 
-        #region Public Methods
-
-        public override void Dispose()
+        internal async Task InitializeAsync(int timeout, CancellationToken cancellationToken)
         {
+            bool lockTaken = false;
+            Monitor.Enter(_lock, ref lockTaken);
             try
             {
-                _client?.Dispose();
-            }
-            catch
-            {
-            }
-            finally
-            {
-                _client = null;
-            }
-        }
-
-        #endregion
-
-
-        #region Internal Methods
-
-        internal override async Task InitializeAsync(int timeout, CancellationToken cancellationToken)
-        {
-            if (!Semaphore.Wait(0))
-            {
-                await Semaphore.WaitAsync(cancellationToken);
-            }
-
-            try
-            {
-                destroyClient();
-
-                await initializeClient(timeout, cancellationToken);
-            }
-            finally
-            {
-                Semaphore.Release();
-            }
-        }
-
-        #endregion
-
-
-        #region Protected Methods
-
-        protected override async Task DestroyAndInitializeClient(int timeout, CancellationToken cancellationToken)
-        {
-            destroyClient();
-
-            try
-            {
-                await initializeClient(timeout, cancellationToken);
+                DestroyClient();
+                await InitializeClient(timeout, cancellationToken);
             }
             catch (ObjectDisposedException)
             {
@@ -123,19 +61,158 @@ namespace RICADO.Omron.Channels
             {
                 throw new OmronException("Failed to Re-Connect to Omron PLC '" + RemoteHost + ":" + Port + "'", e);
             }
+            finally
+            {
+                if (lockTaken)
+                    Monitor.Exit(_lock);
+            }
         }
 
-        protected override Task<SendMessageResult> SendMessageAsync(ReadOnlyMemory<byte> message, int timeout, CancellationToken cancellationToken)
+        internal async Task<ProcessRequestResult> ProcessRequestAsync(FINSRequest request, int timeout, int retries, CancellationToken cancellationToken)
         {
-            return sendMessageAsync(enTCPCommandCode.FINSFrame, message, timeout, cancellationToken);
+            int attempts = 0;
+            Memory<byte> responseMessage = new Memory<byte>();
+            int bytesSent = 0;
+            int packetsSent = 0;
+            int bytesReceived = 0;
+            int packetsReceived = 0;
+            DateTime startTimestamp = DateTime.UtcNow;
+
+            while (attempts <= retries)
+            {
+                bool lockTaken = false;
+                Monitor.Enter(_lock, ref lockTaken);
+                try
+                {
+                    if (attempts > 0)
+                    {
+                        await InitializeAsync(timeout, cancellationToken);
+                    }
+
+                    // Build the Request into a Message we can Send
+                    byte[] requestMessage = request.BuildMessage(GetNextRequestId());
+
+                    // Send the Message
+                    SendMessageResult sendResult = await SendMessageAsync(TcpCommandCode.FINSFrame, requestMessage, timeout, cancellationToken);
+
+                    bytesSent += sendResult.Bytes;
+                    packetsSent += sendResult.Packets;
+
+                    // Receive a Response
+                    ReceiveMessageResult receiveResult = await ReceiveMessageAsync(TcpCommandCode.FINSFrame, timeout, cancellationToken);
+
+                    bytesReceived += receiveResult.Bytes;
+                    packetsReceived += receiveResult.Packets;
+                    responseMessage = receiveResult.Message;
+
+                    break;
+                }
+                catch (Exception)
+                {
+                    if (attempts >= retries)
+                    {
+                        throw;
+                    }
+                }
+                finally
+                {
+                    if (lockTaken)
+                        Monitor.Exit(_lock);
+                }
+
+                // Increment the Attempts
+                attempts++;
+            }
+
+            try
+            {
+                return new ProcessRequestResult
+                {
+                    BytesSent = bytesSent,
+                    PacketsSent = packetsSent,
+                    BytesReceived = bytesReceived,
+                    PacketsReceived = packetsReceived,
+                    Duration = DateTime.UtcNow.Subtract(startTimestamp).TotalMilliseconds,
+                    Response = FINSResponse.CreateNew(responseMessage, request),
+                };
+            }
+            catch (FINSException e)
+            {
+                if (e.Message.Contains("Service ID") && responseMessage.Length >= 9 && responseMessage.Span[9] != request.ServiceID)
+                {
+                    bool lockTaken = false;
+                    Monitor.Enter(_lock, ref lockTaken);
+                    try
+                    {
+                        await PurgeReceiveBuffer(timeout, cancellationToken);
+                    }
+                    finally
+                    {
+                        if (lockTaken)
+                            Monitor.Exit(_lock);
+                    }
+                }
+
+                throw new OmronException("Received a FINS Error Response from Omron PLC '" + RemoteHost + ":" + Port + "'", e);
+            }
         }
 
-        protected override Task<ReceiveMessageResult> ReceiveMessageAsync(int timeout, CancellationToken cancellationToken)
+        #endregion
+
+        private void DestroyClient()
         {
-            return receiveMessageAsync(enTCPCommandCode.FINSFrame, timeout, cancellationToken);
+            try
+            {
+                _client?.Dispose();
+            }
+            finally
+            {
+                _client = null;
+            }
         }
 
-        protected override async Task PurgeReceiveBuffer(int timeout, CancellationToken cancellationToken)
+        private async Task InitializeClient(int timeout, CancellationToken cancellationToken)
+        {
+            _client = new TcpClient(RemoteHost, Port);
+
+            await _client.ConnectAsync(timeout, cancellationToken);
+
+            try
+            {
+                // Send Auto-Assign Client Node Request
+                SendMessageResult sendResult = await SendMessageAsync(TcpCommandCode.NodeAddressToPLC, new byte[4], timeout, cancellationToken);
+
+                // Receive Client Node ID
+                ReceiveMessageResult receiveResult = await ReceiveMessageAsync(TcpCommandCode.NodeAddressFromPLC, timeout, cancellationToken);
+
+                if (receiveResult.Message.Length < 8)
+                {
+                    throw new OmronException("Failed to Negotiate a TCP Connection with Omron PLC '" + RemoteHost + ":" + Port + "' - TCP Negotiation Message Length was too Short");
+                }
+
+                byte[] tcpNegotiationMessage = receiveResult.Message.Slice(0, 8).ToArray();
+
+                if (tcpNegotiationMessage[3] == 0 || tcpNegotiationMessage[3] == 255)
+                {
+                    throw new OmronException("Failed to Negotiate a TCP Connection with Omron PLC '" + RemoteHost + ":" + Port + "' - TCP Negotiation Message contained an Invalid Local Node ID");
+                }
+
+                LocalNodeID = tcpNegotiationMessage[3];
+
+                if (tcpNegotiationMessage[7] == 0 || tcpNegotiationMessage[7] == 255)
+                {
+                    throw new OmronException("Failed to Negotiate a TCP Connection with Omron PLC '" + RemoteHost + ":" + Port + "' - TCP Negotiation Message contained an Invalid Remote Node ID");
+                }
+
+                RemoteNodeID = tcpNegotiationMessage[7];
+            }
+            catch (OmronException e)
+            {
+                throw new OmronException("Failed to Negotiate a TCP Connection with Omron PLC '" + RemoteHost + ":" + Port + "'", e);
+            }
+        }
+
+        private async Task PurgeReceiveBuffer(int timeout, CancellationToken cancellationToken)
         {
             try
             {
@@ -144,11 +221,11 @@ namespace RICADO.Omron.Channels
                     return;
                 }
 
-                if(_client.Available == 0)
+                if (_client.Available == 0)
                 {
                     await Task.Delay(timeout / 4);
                 }
-                
+
                 DateTime startTimestamp = DateTime.UtcNow;
                 Memory<byte> buffer = new byte[2000];
 
@@ -169,65 +246,21 @@ namespace RICADO.Omron.Channels
             }
         }
 
-        #endregion
-
-
-        #region Private Methods
-
-        private async Task initializeClient(int timeout, CancellationToken cancellationToken)
+        private byte GetNextRequestId()
         {
-            _client = new TcpClient(RemoteHost, Port);
-
-            await _client.ConnectAsync(timeout, cancellationToken);
-
-            try
+            if (_requestId == byte.MaxValue)
             {
-                // Send Auto-Assign Client Node Request
-                SendMessageResult sendResult = await sendMessageAsync(enTCPCommandCode.NodeAddressToPLC, new byte[4], timeout, cancellationToken);
-
-                // Receive Client Node ID
-                ReceiveMessageResult receiveResult = await receiveMessageAsync(enTCPCommandCode.NodeAddressFromPLC, timeout, cancellationToken);
-
-                if(receiveResult.Message.Length < 8)
-                {
-                    throw new OmronException("Failed to Negotiate a TCP Connection with Omron PLC '" + RemoteHost + ":" + Port + "' - TCP Negotiation Message Length was too Short");
-                }
-
-                byte[] tcpNegotiationMessage = receiveResult.Message.Slice(0, 8).ToArray();
-
-                if(tcpNegotiationMessage[3] == 0 || tcpNegotiationMessage[3] == 255)
-                {
-                    throw new OmronException("Failed to Negotiate a TCP Connection with Omron PLC '" + RemoteHost + ":" + Port + "' - TCP Negotiation Message contained an Invalid Local Node ID");
-                }
-
-                _localNodeId = tcpNegotiationMessage[3];
-
-                if (tcpNegotiationMessage[7] == 0 || tcpNegotiationMessage[7] == 255)
-                {
-                    throw new OmronException("Failed to Negotiate a TCP Connection with Omron PLC '" + RemoteHost + ":" + Port + "' - TCP Negotiation Message contained an Invalid Remote Node ID");
-                }
-
-                _remoteNodeId = tcpNegotiationMessage[7];
+                _requestId = byte.MinValue;
             }
-            catch (OmronException e)
+            else
             {
-                throw new OmronException("Failed to Negotiate a TCP Connection with Omron PLC '" + RemoteHost + ":" + Port + "'", e);
+                _requestId++;
             }
+
+            return _requestId;
         }
 
-        private void destroyClient()
-        {
-            try
-            {
-                _client?.Dispose();
-            }
-            finally
-            {
-                _client = null;
-            }
-        }
-
-        private async Task<SendMessageResult> sendMessageAsync(enTCPCommandCode command, ReadOnlyMemory<byte> message, int timeout, CancellationToken cancellationToken)
+        private async Task<SendMessageResult> SendMessageAsync(TcpCommandCode command, byte[] message, int timeout, CancellationToken cancellationToken)
         {
             SendMessageResult result = new SendMessageResult
             {
@@ -235,7 +268,7 @@ namespace RICADO.Omron.Channels
                 Packets = 0,
             };
 
-            ReadOnlyMemory<byte> tcpMessage = buildFinsTcpMessage(command, message);
+            ReadOnlyMemory<byte> tcpMessage = BuildFinsTcpMessage(command, message);
 
             try
             {
@@ -258,7 +291,7 @@ namespace RICADO.Omron.Channels
             return result;
         }
 
-        private async Task<ReceiveMessageResult> receiveMessageAsync(enTCPCommandCode command, int timeout, CancellationToken cancellationToken)
+        private async Task<ReceiveMessageResult> ReceiveMessageAsync(TcpCommandCode command, int timeout, CancellationToken cancellationToken)
         {
             ReceiveMessageResult result = new ReceiveMessageResult
             {
@@ -310,14 +343,14 @@ namespace RICADO.Omron.Channels
 
                 int tcpMessageDataLength = (int)BitConverter.ToUInt32(new byte[] { receivedData[7], receivedData[6], receivedData[5], receivedData[4] }) - 8;
 
-                if(tcpMessageDataLength <= 0 || tcpMessageDataLength > short.MaxValue)
+                if (tcpMessageDataLength <= 0 || tcpMessageDataLength > short.MaxValue)
                 {
                     throw new OmronException("Failed to Receive FINS Message from Omron PLC '" + RemoteHost + ":" + Port + "' - The TCP Message Length was Invalid");
                 }
 
-                if(receivedData[11] == 3 || receivedData[15] != 0)
+                if (receivedData[11] == 3 || receivedData[15] != 0)
                 {
-                    switch(receivedData[15])
+                    switch (receivedData[15])
                     {
                         case 1:
                             throw new OmronException("Failed to Receive FINS Message from Omron PLC '" + RemoteHost + ":" + Port + "' - Omron TCP Error: The FINS Identifier (ASCII Code) was Invalid.");
@@ -351,12 +384,12 @@ namespace RICADO.Omron.Channels
                     }
                 }
 
-                if(receivedData[8] != 0 || receivedData[9] != 0 || receivedData[10] != 0 || receivedData[11] != (byte)command)
+                if (receivedData[8] != 0 || receivedData[9] != 0 || receivedData[10] != 0 || receivedData[11] != (byte)command)
                 {
                     throw new OmronException("Failed to Receive FINS Message from Omron PLC '" + RemoteHost + ":" + Port + "' - The TCP Command Received '" + receivedData[11] + "' did not match Expected Command '" + (byte)command + "'");
                 }
 
-                if(command == enTCPCommandCode.FINSFrame && tcpMessageDataLength < FINSResponse.HEADER_LENGTH + FINSResponse.COMMAND_LENGTH + FINSResponse.RESPONSE_CODE_LENGTH)
+                if (command == TcpCommandCode.FINSFrame && tcpMessageDataLength < FINSResponse.HEADER_LENGTH + FINSResponse.COMMAND_LENGTH + FINSResponse.RESPONSE_CODE_LENGTH)
                 {
                     throw new OmronException("Failed to Receive FINS Message from Omron PLC '" + RemoteHost + ":" + Port + "' - The TCP Message Length was too short for a FINS Frame");
                 }
@@ -397,7 +430,7 @@ namespace RICADO.Omron.Channels
                     throw new OmronException("Failed to Receive FINS Message within the Timeout Period from Omron PLC '" + RemoteHost + ":" + Port + "'");
                 }
 
-                if (command == enTCPCommandCode.FINSFrame && receivedData[0] != 0xC0 && receivedData[0] != 0xC1)
+                if (command == TcpCommandCode.FINSFrame && receivedData[0] != 0xC0 && receivedData[0] != 0xC1)
                 {
                     throw new OmronException("Failed to Receive FINS Message from Omron PLC '" + RemoteHost + ":" + Port + "' - The FINS Header was Invalid");
                 }
@@ -420,36 +453,33 @@ namespace RICADO.Omron.Channels
             return result;
         }
 
-        private ReadOnlyMemory<byte> buildFinsTcpMessage(enTCPCommandCode command, ReadOnlyMemory<byte> message)
+        private ReadOnlyMemory<byte> BuildFinsTcpMessage(TcpCommandCode command, byte[] message)
         {
-            List<byte> tcpMessage = new List<byte>();
-
+            var bytes = Enumerable.Repeat((byte)0x00, 16 + message.Length).ToArray();
             // FINS Message Identifier
-            tcpMessage.Add((byte)'F');
-            tcpMessage.Add((byte)'I');
-            tcpMessage.Add((byte)'N');
-            tcpMessage.Add((byte)'S');
+            bytes[0] = (byte)'F';
+            bytes[1] = (byte)'I';
+            bytes[2] = (byte)'N';
+            bytes[3] = (byte)'S';
+            // Length of Message = Command + Error Code + Message Data
+            uint length = Convert.ToUInt32(4 + 4 + message.Length);
+            bytes[4] = (byte)((length & 0xFF000000) >> 24);
+            bytes[5] = (byte)((length & 0x00FF0000) >> 16);
+            bytes[6] = (byte)((length & 0x0000FF00) >> 8);
+            bytes[7] = (byte)(length & 0x000000FF);
 
-            // Length of Message
-            tcpMessage.AddRange(BitConverter.GetBytes(Convert.ToUInt32(4 + 4 + message.Length)).Reverse()); // Command + Error Code + Message Data
+            //var le = BitConverter.IsLittleEndian;
 
             // Command
-            tcpMessage.Add(0);
-            tcpMessage.Add(0);
-            tcpMessage.Add(0);
-            tcpMessage.Add((byte)command);
+            bytes[11] = (byte)command;
 
-            // Error Code
-            tcpMessage.Add(0);
-            tcpMessage.Add(0);
-            tcpMessage.Add(0);
-            tcpMessage.Add(0);
+            // Error Code - 0
 
-            tcpMessage.AddRange(message.ToArray());
+            for (int i = 0; i < message.Length; i++)
+                bytes[16 + i] = message[i];
 
-            return tcpMessage.ToArray();
+            return bytes;
         }
 
-        #endregion
     }
 }
