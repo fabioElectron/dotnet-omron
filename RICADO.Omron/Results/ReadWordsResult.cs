@@ -1,15 +1,13 @@
-﻿using System;
-
-namespace RICADO.Omron.Results
+﻿namespace RICADO.Omron.Results
 {
-    public struct ReadWordsResult
+    public class ReadWordsResult
     {
         public int BytesSent;
         public int PacketsSent;
         public int BytesReceived;
         public int PacketsReceived;
         public double Duration;
-        public short[] Values;
+        public ushort[] Values;
         public byte MainResponseCode;
         public byte SubResponseCode;
     }

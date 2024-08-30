@@ -15,7 +15,7 @@ namespace RICADO.Omron
 
         #region Private Fields
 
-        private enPLCType _plcType = enPLCType.Unknown;
+        private PlcTypes _plcType = PlcTypes.Unknown;
         private bool _isInitialized;
         private bool disposedValue;
         private readonly object _isInitializedLock = new object();
@@ -28,23 +28,23 @@ namespace RICADO.Omron
 
         internal bool IsNSeries => _plcType switch
         {
-            enPLCType.NJ101 => true,
-            enPLCType.NJ301 => true,
-            enPLCType.NJ501 => true,
-            enPLCType.NX1P2 => true,
-            enPLCType.NX102 => true,
-            enPLCType.NX701 => true,
-            enPLCType.NY512 => true,
-            enPLCType.NY532 => true,
-            enPLCType.NJ_NX_NY_Series => true,
+            PlcTypes.NJ101 => true,
+            PlcTypes.NJ301 => true,
+            PlcTypes.NJ501 => true,
+            PlcTypes.NX1P2 => true,
+            PlcTypes.NX102 => true,
+            PlcTypes.NX701 => true,
+            PlcTypes.NY512 => true,
+            PlcTypes.NY532 => true,
+            PlcTypes.NJ_NX_NY_Series => true,
             _ => false,
         };
 
         internal bool IsCSeries => _plcType switch
         {
-            enPLCType.CP1 => true,
-            enPLCType.CJ2 => true,
-            enPLCType.C_Series => true,
+            PlcTypes.CP1 => true,
+            PlcTypes.CJ2 => true,
+            PlcTypes.C_Series => true,
             _ => false,
         };
 
@@ -56,7 +56,7 @@ namespace RICADO.Omron
 
         public byte RemoteNodeID { get; private set; }
 
-        public enConnectionMethod ConnectionMethod { get; private set; }
+        public ConnectionMethods ConnectionMethod { get; private set; }
 
         public string RemoteHost { get; private set; }
 
@@ -66,7 +66,7 @@ namespace RICADO.Omron
 
         public int Retries { get; set; }
 
-        public enPLCType PLCType { get; private set; }
+        public PlcTypes PLCType { get; private set; }
 
         public bool IsInitialized
         {
@@ -83,15 +83,15 @@ namespace RICADO.Omron
 
         public string ControllerVersion { get; private set; }
 
-        public ushort MaximumReadWordLength => _plcType == enPLCType.CP1 ? (ushort)499 : (ushort)999;
+        public ushort MaximumReadWordLength => _plcType == PlcTypes.CP1 ? (ushort)499 : (ushort)999;
 
-        public ushort MaximumWriteWordLength => _plcType == enPLCType.CP1 ? (ushort)496 : (ushort)996;
+        public ushort MaximumWriteWordLength => _plcType == PlcTypes.CP1 ? (ushort)496 : (ushort)996;
 
         #endregion
 
         #region Ctor and Dispose
 
-        public OmronPLC(byte localNodeId, byte remoteNodeId, enConnectionMethod connectionMethod, string remoteHost, int port = 9600, int timeout = 2000, int retries = 1)
+        public OmronPLC(byte localNodeId, byte remoteNodeId, ConnectionMethods connectionMethod, string remoteHost, int port = 9600, int timeout = 2000, int retries = 1)
         {
             if(localNodeId == 0)
             {
@@ -214,7 +214,7 @@ namespace RICADO.Omron
             }
 
             // Initialize the Channel
-            if (ConnectionMethod == enConnectionMethod.UDP)
+            if (ConnectionMethod == ConnectionMethods.UDP)
             {
                 try
                 {
@@ -235,7 +235,7 @@ namespace RICADO.Omron
                     throw new OmronException("Failed to Create the Ethernet UDP Communication Channel for Omron PLC '" + RemoteHost + ":" + Port + "'", e);
                 }
             }
-            else if (ConnectionMethod == enConnectionMethod.TCP)
+            else if (ConnectionMethod == ConnectionMethods.TCP)
             {
                 try
                 {
@@ -265,12 +265,12 @@ namespace RICADO.Omron
             }
         }
 
-        public Task<ReadBitsResult> ReadBitAsync(ushort address, byte bitIndex, enMemoryBitDataType dataType, CancellationToken cancellationToken)
+        public Task<ReadBitsResult> ReadBitAsync(ushort address, byte bitIndex, MemoryBitDataType dataType, CancellationToken cancellationToken)
         {
             return ReadBitsAsync(address, bitIndex, 1, dataType, cancellationToken);
         }
 
-        public async Task<ReadBitsResult> ReadBitsAsync(ushort address, byte startBitIndex, byte length, enMemoryBitDataType dataType, CancellationToken cancellationToken)
+        public async Task<ReadBitsResult> ReadBitsAsync(ushort address, byte startBitIndex, byte length, MemoryBitDataType dataType, CancellationToken cancellationToken)
         {
             lock(_isInitializedLock)
             {
@@ -297,12 +297,12 @@ namespace RICADO.Omron
 
             if (ValidateBitDataType(dataType) == false)
             {
-                throw new ArgumentException("The Data Type '" + Enum.GetName(typeof(enMemoryBitDataType), dataType) + "' is not Supported on this PLC", nameof(dataType));
+                throw new ArgumentException("The Data Type '" + Enum.GetName(typeof(MemoryBitDataType), dataType) + "' is not Supported on this PLC", nameof(dataType));
             }
 
             if (ValidateBitAddress(address, dataType) == false)
             {
-                throw new ArgumentOutOfRangeException(nameof(address), "The Address is greater than the Maximum Address for the '" + Enum.GetName(typeof(enMemoryBitDataType), dataType) + "' Data Type");
+                throw new ArgumentOutOfRangeException(nameof(address), "The Address is greater than the Maximum Address for the '" + Enum.GetName(typeof(MemoryBitDataType), dataType) + "' Data Type");
             }
 
             ReadMemoryAreaBitRequest request = new ReadMemoryAreaBitRequest(this, address, startBitIndex, length, dataType);
@@ -320,12 +320,12 @@ namespace RICADO.Omron
             };
         }
 
-        public Task<ReadWordsResult> ReadWordAsync(ushort address, enMemoryWordDataType dataType, CancellationToken cancellationToken)
+        public Task<ReadWordsResult> ReadWordAsync(ushort address, MemoryWordDataType dataType, CancellationToken cancellationToken)
         {
             return ReadWordsAsync(address, 1, dataType, cancellationToken);
         }
 
-        public async Task<ReadWordsResult> ReadWordsAsync(ushort startAddress, ushort length, enMemoryWordDataType dataType, CancellationToken cancellationToken)
+        public async Task<ReadWordsResult> ReadWordsAsync(ushort startAddress, ushort length, MemoryWordDataType dataType, CancellationToken cancellationToken)
         {
             lock (_isInitializedLock)
             {
@@ -347,12 +347,12 @@ namespace RICADO.Omron
 
             if (ValidateWordDataType(dataType) == false)
             {
-                throw new ArgumentException("The Data Type '" + Enum.GetName(typeof(enMemoryWordDataType), dataType) + "' is not Supported on this PLC", nameof(dataType));
+                throw new ArgumentException("The Data Type '" + Enum.GetName(typeof(MemoryWordDataType), dataType) + "' is not Supported on this PLC", nameof(dataType));
             }
 
             if (ValidateWordStartAddress(startAddress, length, dataType) == false)
             {
-                throw new ArgumentOutOfRangeException(nameof(startAddress), "The Start Address and Length combined are greater than the Maximum Address for the '" + Enum.GetName(typeof(enMemoryWordDataType), dataType) + "' Data Type");
+                throw new ArgumentOutOfRangeException(nameof(startAddress), "The Start Address and Length combined are greater than the Maximum Address for the '" + Enum.GetName(typeof(MemoryWordDataType), dataType) + "' Data Type");
             }
 
             ReadMemoryAreaWordRequest request = new ReadMemoryAreaWordRequest(this, startAddress, length, dataType);
@@ -372,12 +372,12 @@ namespace RICADO.Omron
             };
         }
 
-        public Task<WriteBitsResult> WriteBitAsync(bool value, ushort address, byte bitIndex, enMemoryBitDataType dataType, CancellationToken cancellationToken)
+        public Task<WriteBitsResult> WriteBitAsync(bool value, ushort address, byte bitIndex, MemoryBitDataType dataType, CancellationToken cancellationToken)
         {
             return WriteBitsAsync(new bool[] { value }, address, bitIndex, dataType, cancellationToken);
         }
 
-        public async Task<WriteBitsResult> WriteBitsAsync(bool[] values, ushort address, byte startBitIndex, enMemoryBitDataType dataType, CancellationToken cancellationToken)
+        public async Task<WriteBitsResult> WriteBitsAsync(bool[] values, ushort address, byte startBitIndex, MemoryBitDataType dataType, CancellationToken cancellationToken)
         {
             lock (_isInitializedLock)
             {
@@ -404,12 +404,12 @@ namespace RICADO.Omron
 
             if (ValidateBitDataType(dataType) == false)
             {
-                throw new ArgumentException("The Data Type '" + Enum.GetName(typeof(enMemoryBitDataType), dataType) + "' is not Supported on this PLC", nameof(dataType));
+                throw new ArgumentException("The Data Type '" + Enum.GetName(typeof(MemoryBitDataType), dataType) + "' is not Supported on this PLC", nameof(dataType));
             }
 
             if (ValidateBitAddress(address, dataType) == false)
             {
-                throw new ArgumentOutOfRangeException(nameof(address), "The Address is greater than the Maximum Address for the '" + Enum.GetName(typeof(enMemoryBitDataType), dataType) + "' Data Type");
+                throw new ArgumentOutOfRangeException(nameof(address), "The Address is greater than the Maximum Address for the '" + Enum.GetName(typeof(MemoryBitDataType), dataType) + "' Data Type");
             }
 
             WriteMemoryAreaBitRequest request = new WriteMemoryAreaBitRequest(this, address, startBitIndex, dataType, values);
@@ -428,12 +428,12 @@ namespace RICADO.Omron
             };
         }
 
-        public Task<WriteWordsResult> WriteWordAsync(short value, ushort address, enMemoryWordDataType dataType, CancellationToken cancellationToken)
+        public Task<WriteWordsResult> WriteWordAsync(ushort value, ushort address, MemoryWordDataType dataType, CancellationToken cancellationToken)
         {
-            return WriteWordsAsync(new short[] { value }, address, dataType, cancellationToken);
+            return WriteWordsAsync(new ushort[] { value }, address, dataType, cancellationToken);
         }
 
-        public async Task<WriteWordsResult> WriteWordsAsync(short[] values, ushort startAddress, enMemoryWordDataType dataType, CancellationToken cancellationToken)
+        public async Task<WriteWordsResult> WriteWordsAsync(ushort[] values, ushort startAddress, MemoryWordDataType dataType, CancellationToken cancellationToken)
         {
             lock (_isInitializedLock)
             {
@@ -455,12 +455,12 @@ namespace RICADO.Omron
 
             if (ValidateWordDataType(dataType) == false)
             {
-                throw new ArgumentException("The Data Type '" + Enum.GetName(typeof(enMemoryWordDataType), dataType) + "' is not Supported on this PLC", nameof(dataType));
+                throw new ArgumentException("The Data Type '" + Enum.GetName(typeof(MemoryWordDataType), dataType) + "' is not Supported on this PLC", nameof(dataType));
             }
 
             if (ValidateWordStartAddress(startAddress, values.Length, dataType) == false)
             {
-                throw new ArgumentOutOfRangeException(nameof(startAddress), "The Start Address and Values Array Length combined are greater than the Maximum Address for the '" + Enum.GetName(typeof(enMemoryWordDataType), dataType) + "' Data Type");
+                throw new ArgumentOutOfRangeException(nameof(startAddress), "The Start Address and Values Array Length combined are greater than the Maximum Address for the '" + Enum.GetName(typeof(MemoryWordDataType), dataType) + "' Data Type");
             }
 
             WriteMemoryAreaWordRequest request = new WriteMemoryAreaWordRequest(this, startAddress, dataType, values);
@@ -495,7 +495,7 @@ namespace RICADO.Omron
 
             ProcessRequestResult requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
 
-            ReadClockResponse.ClockResult result = ReadClockResponse.ExtractClock(request, requestResult.Response);
+            ClockResult result = ReadClockResponse.ExtractClock(request, requestResult.Response);
 
             return new ReadClockResult
             {
@@ -574,7 +574,7 @@ namespace RICADO.Omron
                 }
             }
 
-            if (IsNSeries == true && _plcType != enPLCType.NJ101 && _plcType != enPLCType.NJ301 && _plcType != enPLCType.NJ501)
+            if (IsNSeries == true && _plcType != PlcTypes.NJ101 && _plcType != PlcTypes.NJ301 && _plcType != PlcTypes.NJ501)
             {
                 throw new OmronException("Read Cycle Time is not Supported on the NX/NY Series PLC");
             }
@@ -583,7 +583,7 @@ namespace RICADO.Omron
 
             ProcessRequestResult requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
 
-            ReadCycleTimeResponse.CycleTimeResult result = ReadCycleTimeResponse.ExtractCycleTime(request, requestResult.Response);
+            CycleTimeResult result = ReadCycleTimeResponse.ExtractCycleTime(request, requestResult.Response);
 
             return new ReadCycleTimeResult
             {
@@ -612,7 +612,7 @@ namespace RICADO.Omron
 
             ProcessRequestResult requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
 
-            ReadOperatingModeResponse.OperatingModeResult result = ReadOperatingModeResponse.ExtractOperatingMode(request, requestResult.Response);
+            OperatingModeResult result = ReadOperatingModeResponse.ExtractOperatingMode(request, requestResult.Response);
 
             return new ReadOperatingModeResult
             {
@@ -630,19 +630,19 @@ namespace RICADO.Omron
             };
         }
 
-        public int GetAreaSize(enMemoryWordDataType area)
+        public int GetAreaSize(MemoryWordDataType area)
         {
             return area switch
             {
-                enMemoryWordDataType.DataMemory => (_plcType == enPLCType.NX1P2 ? 16000 : 32768),
-                enMemoryWordDataType.CommonIO => 6144,
-                enMemoryWordDataType.Work => 512,
-                enMemoryWordDataType.Holding => 1536,//TODO FB 512
-                enMemoryWordDataType.Auxiliary => (_plcType == enPLCType.CJ2 ? 11536 : 960),
-                enMemoryWordDataType.ExtendedMemoryBank0 => 32768,
-                enMemoryWordDataType.ExtendedMemoryBank1 => 32768,
-                enMemoryWordDataType.ExtendedMemoryBank2 => 32768,
-                enMemoryWordDataType.ExtendedMemoryBank3 => 32768,
+                MemoryWordDataType.DataMemory => (_plcType == PlcTypes.NX1P2 ? 16000 : 32768),
+                MemoryWordDataType.CommonIO => 6144,
+                MemoryWordDataType.Work => 512,
+                MemoryWordDataType.Holding => 1536,//TODO FB 512
+                MemoryWordDataType.Auxiliary => (_plcType == PlcTypes.CJ2 ? 11536 : 960),
+                MemoryWordDataType.ExtendedMemoryBank0 => 32768,
+                MemoryWordDataType.ExtendedMemoryBank1 => 32768,
+                MemoryWordDataType.ExtendedMemoryBank2 => 32768,
+                MemoryWordDataType.ExtendedMemoryBank3 => 32768,
                 _ => 0,
             };
         }
@@ -651,62 +651,62 @@ namespace RICADO.Omron
 
         #region Private Methods
 
-        private bool ValidateBitAddress(ushort address, enMemoryBitDataType dataType)
+        private bool ValidateBitAddress(ushort address, MemoryBitDataType dataType)
         {
             return dataType switch
             {
-                enMemoryBitDataType.DataMemory => address < GetAreaSize(enMemoryWordDataType.DataMemory),
-                enMemoryBitDataType.CommonIO => address < GetAreaSize(enMemoryWordDataType.CommonIO),
-                enMemoryBitDataType.Work => address < GetAreaSize(enMemoryWordDataType.Work),
-                enMemoryBitDataType.Holding => address < GetAreaSize(enMemoryWordDataType.Holding),
-                enMemoryBitDataType.Auxiliary => address < GetAreaSize(enMemoryWordDataType.Auxiliary),
+                MemoryBitDataType.DataMemory => address < GetAreaSize(MemoryWordDataType.DataMemory),
+                MemoryBitDataType.CommonIO => address < GetAreaSize(MemoryWordDataType.CommonIO),
+                MemoryBitDataType.Work => address < GetAreaSize(MemoryWordDataType.Work),
+                MemoryBitDataType.Holding => address < GetAreaSize(MemoryWordDataType.Holding),
+                MemoryBitDataType.Auxiliary => address < GetAreaSize(MemoryWordDataType.Auxiliary),
                 _ => false,
             };
         }
 
-        private bool ValidateBitDataType(enMemoryBitDataType dataType)
+        private bool ValidateBitDataType(MemoryBitDataType dataType)
         {
             return dataType switch
             {
-                enMemoryBitDataType.DataMemory => _plcType != enPLCType.CP1,
-                enMemoryBitDataType.CommonIO => true,
-                enMemoryBitDataType.Work => true,
-                enMemoryBitDataType.Holding => true,
-                enMemoryBitDataType.Auxiliary => !IsNSeries,
+                MemoryBitDataType.DataMemory => _plcType != PlcTypes.CP1,
+                MemoryBitDataType.CommonIO => true,
+                MemoryBitDataType.Work => true,
+                MemoryBitDataType.Holding => true,
+                MemoryBitDataType.Auxiliary => !IsNSeries,
                 _ => false,
             };
         }
 
-        private bool ValidateWordStartAddress(ushort startAddress, int length, enMemoryWordDataType dataType)
+        private bool ValidateWordStartAddress(ushort startAddress, int length, MemoryWordDataType dataType)
         {
             return dataType switch
             {
-                enMemoryWordDataType.DataMemory => startAddress + (length - 1) < GetAreaSize(dataType),
-                enMemoryWordDataType.CommonIO => startAddress + (length - 1) < GetAreaSize(dataType),
-                enMemoryWordDataType.Work => startAddress + (length - 1) < GetAreaSize(dataType),
-                enMemoryWordDataType.Holding => startAddress + (length - 1) < GetAreaSize(dataType),
-                enMemoryWordDataType.Auxiliary => startAddress + (length - 1) < GetAreaSize(dataType),
-                enMemoryWordDataType.ExtendedMemoryBank0 => startAddress + (length - 1) < GetAreaSize(dataType),
-                enMemoryWordDataType.ExtendedMemoryBank1 => startAddress + (length - 1) < GetAreaSize(dataType),
-                enMemoryWordDataType.ExtendedMemoryBank2 => startAddress + (length - 1) < GetAreaSize(dataType),
-                enMemoryWordDataType.ExtendedMemoryBank3 => startAddress + (length - 1) < GetAreaSize(dataType),
+                MemoryWordDataType.DataMemory => startAddress + (length - 1) < GetAreaSize(dataType),
+                MemoryWordDataType.CommonIO => startAddress + (length - 1) < GetAreaSize(dataType),
+                MemoryWordDataType.Work => startAddress + (length - 1) < GetAreaSize(dataType),
+                MemoryWordDataType.Holding => startAddress + (length - 1) < GetAreaSize(dataType),
+                MemoryWordDataType.Auxiliary => startAddress + (length - 1) < GetAreaSize(dataType),
+                MemoryWordDataType.ExtendedMemoryBank0 => startAddress + (length - 1) < GetAreaSize(dataType),
+                MemoryWordDataType.ExtendedMemoryBank1 => startAddress + (length - 1) < GetAreaSize(dataType),
+                MemoryWordDataType.ExtendedMemoryBank2 => startAddress + (length - 1) < GetAreaSize(dataType),
+                MemoryWordDataType.ExtendedMemoryBank3 => startAddress + (length - 1) < GetAreaSize(dataType),
                 _ => false,
             };
         }
 
-        private bool ValidateWordDataType(enMemoryWordDataType dataType)
+        private bool ValidateWordDataType(MemoryWordDataType dataType)
         {
             return dataType switch
             {
-                enMemoryWordDataType.DataMemory => true,
-                enMemoryWordDataType.CommonIO => true,
-                enMemoryWordDataType.Work => true,
-                enMemoryWordDataType.Holding => true,
-                enMemoryWordDataType.Auxiliary => !IsNSeries,
-                enMemoryWordDataType.ExtendedMemoryBank0 => true,
-                enMemoryWordDataType.ExtendedMemoryBank1 => true,
-                enMemoryWordDataType.ExtendedMemoryBank2 => true,
-                enMemoryWordDataType.ExtendedMemoryBank3 => true,
+                MemoryWordDataType.DataMemory => true,
+                MemoryWordDataType.CommonIO => true,
+                MemoryWordDataType.Work => true,
+                MemoryWordDataType.Holding => true,
+                MemoryWordDataType.Auxiliary => !IsNSeries,
+                MemoryWordDataType.ExtendedMemoryBank0 => true,
+                MemoryWordDataType.ExtendedMemoryBank1 => true,
+                MemoryWordDataType.ExtendedMemoryBank2 => true,
+                MemoryWordDataType.ExtendedMemoryBank3 => true,
                 _ => false,
             };
         }
@@ -717,7 +717,7 @@ namespace RICADO.Omron
 
             ProcessRequestResult requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
 
-            ReadCPUUnitDataResponse.CPUUnitDataResult result = ReadCPUUnitDataResponse.ExtractData(requestResult.Response);
+            CPUUnitDataResult result = ReadCPUUnitDataResponse.ExtractData(requestResult.Response);
 
             if(result.ControllerModel != null && result.ControllerModel.Length > 0)
             {
@@ -725,47 +725,47 @@ namespace RICADO.Omron
 
                 if (ControllerModel.StartsWith("NJ101"))
                 {
-                    _plcType = enPLCType.NJ101;
+                    _plcType = PlcTypes.NJ101;
                 }
                 else if (ControllerModel.StartsWith("NJ301"))
                 {
-                    _plcType = enPLCType.NJ301;
+                    _plcType = PlcTypes.NJ301;
                 }
                 else if (ControllerModel.StartsWith("NJ501"))
                 {
-                    _plcType = enPLCType.NJ501;
+                    _plcType = PlcTypes.NJ501;
                 }
                 else if (ControllerModel.StartsWith("NX1P2"))
                 {
-                    _plcType = enPLCType.NX1P2;
+                    _plcType = PlcTypes.NX1P2;
                 }
                 else if (ControllerModel.StartsWith("NX102"))
                 {
-                    _plcType = enPLCType.NX102;
+                    _plcType = PlcTypes.NX102;
                 }
                 else if (ControllerModel.StartsWith("NX701"))
                 {
-                    _plcType = enPLCType.NX701;
+                    _plcType = PlcTypes.NX701;
                 }
                 else if(ControllerModel.StartsWith("NJ") || ControllerModel.StartsWith("NX") || ControllerModel.StartsWith("NY"))
                 {
-                    _plcType = enPLCType.NJ_NX_NY_Series;
+                    _plcType = PlcTypes.NJ_NX_NY_Series;
                 }
                 else if(ControllerModel.StartsWith("CJ2"))
                 {
-                    _plcType = enPLCType.CJ2;
+                    _plcType = PlcTypes.CJ2;
                 }
                 else if(ControllerModel.StartsWith("CP1"))
                 {
-                    _plcType = enPLCType.CP1;
+                    _plcType = PlcTypes.CP1;
                 }
                 else if(ControllerModel.StartsWith("C"))
                 {
-                    _plcType = enPLCType.C_Series;
+                    _plcType = PlcTypes.C_Series;
                 }
                 else
                 {
-                    _plcType = enPLCType.Unknown;
+                    _plcType = PlcTypes.Unknown;
                 }
             }
 

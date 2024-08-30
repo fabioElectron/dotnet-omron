@@ -4,7 +4,7 @@
     {
 
         public ReadCPUUnitDataRequest(OmronPLC plc) 
-            : base(plc, (byte)enFunctionCode.MachineConfiguration, (byte)enMachineConfigurationFunctionCode.ReadCPUUnitData)
+            : base(plc, (byte)FunctionCodes.MachineConfiguration, (byte)MachineConfigurationFunctionCodes.ReadCPUUnitData)
         {
             Body = [0];// Read Data
         }

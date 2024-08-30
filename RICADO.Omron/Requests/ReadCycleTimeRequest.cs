@@ -4,7 +4,7 @@
     {
 
         public ReadCycleTimeRequest(OmronPLC plc) 
-            : base(plc, (byte)enFunctionCode.Status, (byte)enStatusFunctionCode.ReadCycleTime)
+            : base(plc, (byte)FunctionCodes.Status, (byte)StatusFunctionCodes.ReadCycleTime)
         {
             Body = [0x01];// Read Cycle Time
         }

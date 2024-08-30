@@ -1,8 +1,6 @@
-﻿using System;
-
-namespace RICADO.Omron.Results
+﻿namespace RICADO.Omron.Results
 {
-    public struct ReadBitsResult
+    public class ReadBitsResult
     {
         public int BytesSent;
         public int PacketsSent;

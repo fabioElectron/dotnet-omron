@@ -1,8 +1,6 @@
-﻿using System;
-
-namespace RICADO.Omron.Results
+﻿namespace RICADO.Omron.Results
 {
-    public struct WriteClockResult
+    public class WriteClockResult
     {
         public int BytesSent;
         public int PacketsSent;

@@ -2,7 +2,7 @@
 
 namespace RICADO.Omron.Results
 {
-    public struct ReadClockResult
+    public class ReadClockResult
     {
         public int BytesSent;
         public int PacketsSent;

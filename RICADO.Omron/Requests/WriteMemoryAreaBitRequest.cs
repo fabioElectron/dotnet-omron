@@ -1,23 +1,21 @@
-﻿using System;
-using System.Linq;
-
-namespace RICADO.Omron.Requests
+﻿namespace RICADO.Omron.Requests
 {
     internal class WriteMemoryAreaBitRequest : FINSRequest
     {
 
-        public WriteMemoryAreaBitRequest(OmronPLC plc, ushort address, byte startBitIndex, enMemoryBitDataType dataType, bool[] values) 
-            : base(plc, (byte)enFunctionCode.MemoryArea, (byte)enMemoryAreaFunctionCode.Write)
+        public WriteMemoryAreaBitRequest(OmronPLC plc, ushort address, byte startBitIndex, MemoryBitDataType dataType, bool[] values) 
+            : base(plc, (byte)FunctionCodes.MemoryArea, (byte)MemoryAreaFunctionCodes.Write)
         {
             Body = new byte[6 + values.Length];
             Body[0] = (byte)dataType;// Memory Area Data Type
-            var bytes = BitConverter.GetBytes(address).Reverse().ToArray();// Address
-            Body[1] = bytes[0];
-            Body[2] = bytes[1];
+            // Address
+            Body[1] = (byte)(address >> 8);
+            Body[2] = (byte)(address & 0x00FF);
             Body[3] = startBitIndex;// Bit Index
-            bytes = BitConverter.GetBytes((ushort)values.Length).Reverse().ToArray();// Length
-            Body[4] = bytes[0];
-            Body[5] = bytes[1];
+            // Length
+            ushort length = (ushort)values.Length;
+            Body[4] = (byte)(length >> 8);
+            Body[5] = (byte)(length & 0x00FF);
             // Bit Values
             for (int i = 0; i < values.Length; i++)
             {

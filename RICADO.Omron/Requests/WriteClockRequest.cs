@@ -6,7 +6,7 @@ namespace RICADO.Omron.Requests
     {
 
         public WriteClockRequest(OmronPLC plc, DateTime dateTime, byte dayOfWeek)
-            : base(plc, (byte)enFunctionCode.TimeData, (byte)enTimeDataFunctionCode.WriteClock)
+            : base(plc, (byte)FunctionCodes.TimeData, (byte)TimeDataFunctionCodes.WriteClock)
         {
             Body = [
                 BCDConverter.GetBCDByte((byte)(dateTime.Year % 100)),// Year (Last 2 Digits)

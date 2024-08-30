@@ -1,12 +1,12 @@
 ﻿namespace RICADO.Omron
 {
-    public enum enConnectionMethod
+    public enum ConnectionMethods
     {
         TCP,
         UDP,
     }
     
-    public enum enPLCType
+    public enum PlcTypes
     {
         NJ101,
         NJ301,
@@ -23,7 +23,7 @@
         Unknown,
     }
 
-    public enum enMemoryBitDataType : byte
+    public enum MemoryBitDataType : byte
     {
         DataMemory = 0x2,
         CommonIO = 0x30,
@@ -32,7 +32,7 @@
         Auxiliary = 0x33,
     }
 
-    public enum enMemoryWordDataType : byte
+    public enum MemoryWordDataType : byte
     {
         DataMemory = 0x82,
         CommonIO = 0xB0,
@@ -45,7 +45,7 @@
         ExtendedMemoryBank3 = 0xA3, // 0x53 on CJ2
     }
 
-    internal enum enFunctionCode : byte
+    internal enum FunctionCodes : byte
     {
         MemoryArea = 0x01,
         ParameterArea = 0x02,
@@ -63,7 +63,7 @@
         SerialGateway = 0x28,
     }
 
-    internal enum enMemoryAreaFunctionCode : byte
+    internal enum MemoryAreaFunctionCodes : byte
     {
         Read = 0x01,
         Write = 0x02,
@@ -72,70 +72,70 @@
         Transfer = 0x05,
     }
 
-    internal enum enParameterAreaFunctionCode : byte
+    internal enum ParameterAreaFunctionCodes : byte
     {
         Read = 0x01,
         Write = 0x02,
         Fill = 0x03,
     }
 
-    internal enum enProgramAreaFunctionCode : byte
+    internal enum ProgramAreaFunctionCodes : byte
     {
         Read = 0x06,
         Write = 0x07,
         Clear = 0x08,
     }
 
-    internal enum enOperatingModeFunctionCode : byte
+    internal enum OperatingModeFunctionCodes : byte
     {
         RunMode = 0x01,
         StopMode = 0x02,
     }
 
-    internal enum enMachineConfigurationFunctionCode : byte
+    internal enum MachineConfigurationFunctionCodes : byte
     {
         ReadCPUUnitData = 0x01,
         ReadConnectionData = 0x02,
     }
 
-    internal enum enStatusFunctionCode : byte
+    internal enum StatusFunctionCodes : byte
     {
         ReadCPUUnitStatus = 0x01,
         ReadCycleTime = 0x20,
     }
 
-    internal enum enTimeDataFunctionCode : byte
+    internal enum TimeDataFunctionCodes : byte
     {
         ReadClock = 0x01,
         WriteClock = 0x02,
     }
 
-    internal enum enMessageDisplayFunctionCode : byte
+    internal enum MessageDisplayFunctionCodes : byte
     {
         Read = 0x20,
     }
 
-    internal enum enAccessRightsFunctionCode : byte
+    internal enum AccessRightsFunctionCodes : byte
     {
         Acquire = 0x01,
         ForcedAcquire = 0x02,
         Release = 0x03,
     }
 
-    internal enum enErrorLogFunctionCode : byte
+    internal enum ErrorLogFunctionCodes : byte
     {
         ClearMessages = 0x01,
         Read = 0x02,
         ClearLog = 0x03,
     }
 
-    internal enum enFinsWriteLogFunctionCode : byte
+    internal enum FinsWriteLogFunctionCodes : byte
     {
         Read = 0x40,
         Clear = 0x41,
     }
 
-    internal enum enFileMemoryFunctionCode : byte
+    internal enum FileMemoryFunctionCodes : byte
     {
         ReadFileName = 0x01,
         ReadSingleFile = 0x02,
@@ -150,16 +150,17 @@
         CreateOrDeleteDirectory = 0x15,
     }
 
-    internal enum enDebuggingFunctionCode : byte
+    internal enum DebuggingFunctionCodes : byte
     {
         ForceBits = 0x01,
         ClearForcedBits = 0x02,
     }
 
-    internal enum enSerialGatewayFunctionCode : byte
+    internal enum SerialGatewayFunctionCodes : byte
     {
         ConvertToCompoWayFCommand = 0x03,
         ConvertToModbusRTUCommand = 0x04,
         ConvertToModbusASCIICommand = 0x05,
     }
+
 }

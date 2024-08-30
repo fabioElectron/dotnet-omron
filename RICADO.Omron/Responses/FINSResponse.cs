@@ -140,7 +140,7 @@ namespace RICADO.Omron.Responses
 
             if (response.FunctionCode != request.FunctionCode)
             {
-                throw new FINSException("Unexpected Function Code '" + Enum.GetName(typeof(enFunctionCode), response.FunctionCode) + "' - Expecting '" + Enum.GetName(typeof(enFunctionCode), request.FunctionCode) + "'");
+                throw new FINSException("Unexpected Function Code '" + Enum.GetName(typeof(FunctionCodes), response.FunctionCode) + "' - Expecting '" + Enum.GetName(typeof(FunctionCodes), request.FunctionCode) + "'");
             }
 
             if(ValidateSubFunctionCode(command[0], command[1]) == false)
@@ -180,51 +180,51 @@ namespace RICADO.Omron.Responses
 
         internal static bool ValidateFunctionCode(byte functionCode)
         {
-            return Enum.IsDefined(typeof(enFunctionCode), functionCode);
+            return Enum.IsDefined(typeof(FunctionCodes), functionCode);
         }
 
         internal static bool ValidateSubFunctionCode(byte functionCode, byte subFunctionCode)
         {
-            switch((enFunctionCode)functionCode)
+            switch((FunctionCodes)functionCode)
             {
-                case enFunctionCode.AccessRights:
-                    return Enum.IsDefined(typeof(enAccessRightsFunctionCode), subFunctionCode);
+                case FunctionCodes.AccessRights:
+                    return Enum.IsDefined(typeof(AccessRightsFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.Debugging:
-                    return Enum.IsDefined(typeof(enDebuggingFunctionCode), subFunctionCode);
+                case FunctionCodes.Debugging:
+                    return Enum.IsDefined(typeof(DebuggingFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.ErrorLog:
-                    return Enum.IsDefined(typeof(enErrorLogFunctionCode), subFunctionCode) || Enum.IsDefined(typeof(enFinsWriteLogFunctionCode), subFunctionCode);
+                case FunctionCodes.ErrorLog:
+                    return Enum.IsDefined(typeof(ErrorLogFunctionCodes), subFunctionCode) || Enum.IsDefined(typeof(FinsWriteLogFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.FileMemory:
-                    return Enum.IsDefined(typeof(enFileMemoryFunctionCode), subFunctionCode);
+                case FunctionCodes.FileMemory:
+                    return Enum.IsDefined(typeof(FileMemoryFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.MachineConfiguration:
-                    return Enum.IsDefined(typeof(enMachineConfigurationFunctionCode), subFunctionCode);
+                case FunctionCodes.MachineConfiguration:
+                    return Enum.IsDefined(typeof(MachineConfigurationFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.MemoryArea:
-                    return Enum.IsDefined(typeof(enMemoryAreaFunctionCode), subFunctionCode);
+                case FunctionCodes.MemoryArea:
+                    return Enum.IsDefined(typeof(MemoryAreaFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.MessageDisplay:
-                    return Enum.IsDefined(typeof(enMessageDisplayFunctionCode), subFunctionCode);
+                case FunctionCodes.MessageDisplay:
+                    return Enum.IsDefined(typeof(MessageDisplayFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.OperatingMode:
-                    return Enum.IsDefined(typeof(enOperatingModeFunctionCode), subFunctionCode);
+                case FunctionCodes.OperatingMode:
+                    return Enum.IsDefined(typeof(OperatingModeFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.ParameterArea:
-                    return Enum.IsDefined(typeof(enParameterAreaFunctionCode), subFunctionCode);
+                case FunctionCodes.ParameterArea:
+                    return Enum.IsDefined(typeof(ParameterAreaFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.ProgramArea:
-                    return Enum.IsDefined(typeof(enProgramAreaFunctionCode), subFunctionCode);
+                case FunctionCodes.ProgramArea:
+                    return Enum.IsDefined(typeof(ProgramAreaFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.SerialGateway:
-                    return Enum.IsDefined(typeof(enSerialGatewayFunctionCode), subFunctionCode);
+                case FunctionCodes.SerialGateway:
+                    return Enum.IsDefined(typeof(SerialGatewayFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.Status:
-                    return Enum.IsDefined(typeof(enStatusFunctionCode), subFunctionCode);
+                case FunctionCodes.Status:
+                    return Enum.IsDefined(typeof(StatusFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.TimeData:
-                    return Enum.IsDefined(typeof(enTimeDataFunctionCode), subFunctionCode);
+                case FunctionCodes.TimeData:
+                    return Enum.IsDefined(typeof(TimeDataFunctionCodes), subFunctionCode);
             }
 
             return false;
@@ -237,46 +237,46 @@ namespace RICADO.Omron.Responses
 
         private static string GetSubFunctionCodeName(byte functionCode, byte subFunctionCode)
         {
-            switch ((enFunctionCode)functionCode)
+            switch ((FunctionCodes)functionCode)
             {
-                case enFunctionCode.AccessRights:
-                    return Enum.GetName(typeof(enAccessRightsFunctionCode), subFunctionCode);
+                case FunctionCodes.AccessRights:
+                    return Enum.GetName(typeof(AccessRightsFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.Debugging:
-                    return Enum.GetName(typeof(enDebuggingFunctionCode), subFunctionCode);
+                case FunctionCodes.Debugging:
+                    return Enum.GetName(typeof(DebuggingFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.ErrorLog:
-                    return Enum.IsDefined(typeof(enErrorLogFunctionCode), subFunctionCode) ? Enum.GetName(typeof(enErrorLogFunctionCode), subFunctionCode) : Enum.GetName(typeof(enFinsWriteLogFunctionCode), subFunctionCode);
+                case FunctionCodes.ErrorLog:
+                    return Enum.IsDefined(typeof(ErrorLogFunctionCodes), subFunctionCode) ? Enum.GetName(typeof(ErrorLogFunctionCodes), subFunctionCode) : Enum.GetName(typeof(FinsWriteLogFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.FileMemory:
-                    return Enum.GetName(typeof(enFileMemoryFunctionCode), subFunctionCode);
+                case FunctionCodes.FileMemory:
+                    return Enum.GetName(typeof(FileMemoryFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.MachineConfiguration:
-                    return Enum.GetName(typeof(enMachineConfigurationFunctionCode), subFunctionCode);
+                case FunctionCodes.MachineConfiguration:
+                    return Enum.GetName(typeof(MachineConfigurationFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.MemoryArea:
-                    return Enum.GetName(typeof(enMemoryAreaFunctionCode), subFunctionCode);
+                case FunctionCodes.MemoryArea:
+                    return Enum.GetName(typeof(MemoryAreaFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.MessageDisplay:
-                    return Enum.GetName(typeof(enMessageDisplayFunctionCode), subFunctionCode);
+                case FunctionCodes.MessageDisplay:
+                    return Enum.GetName(typeof(MessageDisplayFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.OperatingMode:
-                    return Enum.GetName(typeof(enOperatingModeFunctionCode), subFunctionCode);
+                case FunctionCodes.OperatingMode:
+                    return Enum.GetName(typeof(OperatingModeFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.ParameterArea:
-                    return Enum.GetName(typeof(enParameterAreaFunctionCode), subFunctionCode);
+                case FunctionCodes.ParameterArea:
+                    return Enum.GetName(typeof(ParameterAreaFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.ProgramArea:
-                    return Enum.GetName(typeof(enProgramAreaFunctionCode), subFunctionCode);
+                case FunctionCodes.ProgramArea:
+                    return Enum.GetName(typeof(ProgramAreaFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.SerialGateway:
-                    return Enum.GetName(typeof(enSerialGatewayFunctionCode), subFunctionCode);
+                case FunctionCodes.SerialGateway:
+                    return Enum.GetName(typeof(SerialGatewayFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.Status:
-                    return Enum.GetName(typeof(enStatusFunctionCode), subFunctionCode);
+                case FunctionCodes.Status:
+                    return Enum.GetName(typeof(StatusFunctionCodes), subFunctionCode);
 
-                case enFunctionCode.TimeData:
-                    return Enum.GetName(typeof(enTimeDataFunctionCode), subFunctionCode);
+                case FunctionCodes.TimeData:
+                    return Enum.GetName(typeof(TimeDataFunctionCodes), subFunctionCode);
             }
 
             return "Unknown";

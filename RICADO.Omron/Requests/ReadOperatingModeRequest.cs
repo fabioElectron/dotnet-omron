@@ -4,7 +4,7 @@
     {
 
         public ReadOperatingModeRequest(OmronPLC plc) 
-            : base(plc, (byte)enFunctionCode.Status, (byte)enStatusFunctionCode.ReadCPUUnitStatus)
+            : base(plc, (byte)FunctionCodes.Status, (byte)StatusFunctionCodes.ReadCPUUnitStatus)
         {
             Body = [];
         }

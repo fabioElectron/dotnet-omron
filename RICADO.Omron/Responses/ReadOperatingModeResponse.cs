@@ -5,9 +5,19 @@ using System.Text;
 
 namespace RICADO.Omron.Responses
 {
+
+    internal class OperatingModeResult
+    {
+        internal byte Status;
+        internal byte Mode;
+        internal ushort FatalErrorData;
+        internal ushort NonFatalErrorData;
+        internal byte ErrorCode;
+        internal string ErrorMessage;
+    }
+
     internal class ReadOperatingModeResponse
     {
-        #region Constants
 
         internal const int STATUS_ITEM_LENGTH = 1;
         internal const int MODE_ITEM_LENGTH = 1;
@@ -16,18 +26,13 @@ namespace RICADO.Omron.Responses
         internal const int ERROR_CODE_LENGTH = 2;
         internal const int ERROR_MESSAGE_LENGTH = 0; // or 16 if error code != 0
 
-        #endregion
 
-
-        #region Internal Methods
 
         internal static OperatingModeResult ExtractOperatingMode(ReadOperatingModeRequest request, FINSResponse response)
         {
             var totalLength = STATUS_ITEM_LENGTH + MODE_ITEM_LENGTH + FATAL_ERROR_ITEM_LENGTH + NON_FATAL_ERROR_LENGTH + ERROR_CODE_LENGTH + ERROR_MESSAGE_LENGTH;
             if (response.Data.Length < totalLength)
-            {
                 throw new FINSException("The Response Data Length of '" + response.Data.Length.ToString() + "' was too short - Expecting a Length of '" + (totalLength).ToString() + "'");
-            }
 
             ReadOnlyMemory<byte> data = response.Data;
             byte errorCode = BCDConverter.ToByte(data.ToArray()[STATUS_ITEM_LENGTH + MODE_ITEM_LENGTH + FATAL_ERROR_ITEM_LENGTH + NON_FATAL_ERROR_LENGTH]);
@@ -39,54 +44,27 @@ namespace RICADO.Omron.Responses
                 FatalErrorData = BitConverter.ToUInt16(new byte[] { data.ToArray()[STATUS_ITEM_LENGTH + MODE_ITEM_LENGTH + 1], data.ToArray()[STATUS_ITEM_LENGTH + MODE_ITEM_LENGTH] }),
                 NonFatalErrorData = BitConverter.ToUInt16(new byte[] { data.ToArray()[STATUS_ITEM_LENGTH + MODE_ITEM_LENGTH + FATAL_ERROR_ITEM_LENGTH + 1], data.ToArray()[STATUS_ITEM_LENGTH + MODE_ITEM_LENGTH + FATAL_ERROR_ITEM_LENGTH] }),
                 ErrorCode = errorCode,
-                ErrorMessage = (errorCode == 0) ? string.Empty : extractStringValue(data.Slice(totalLength, 16).ToArray())
+                ErrorMessage = (errorCode == 0) ? string.Empty : ExtractStringValue(data.Slice(totalLength, 16).ToArray())
             };
-    }
-
-    #endregion
-
-
-    #region Private Methods
-
-    private static string extractStringValue(byte[] bytes)
-    {
-        List<byte> stringBytes = new List<byte>(bytes.Length);
-
-        foreach (byte byteValue in bytes)
-        {
-            if (byteValue > 0)
-            {
-                stringBytes.Add(byteValue);
-            }
-            else
-            {
-                break;
-            }
         }
 
-        if (stringBytes.Count == 0)
+        private static string ExtractStringValue(byte[] bytes)
         {
-            return "";
+            List<byte> stringBytes = new List<byte>(bytes.Length);
+
+            foreach (byte byteValue in bytes)
+            {
+                if (byteValue > 0)
+                    stringBytes.Add(byteValue);
+                else
+                    break;
+            }
+
+            if (stringBytes.Count == 0)
+                return "";
+
+            return ASCIIEncoding.ASCII.GetString(stringBytes.ToArray()).Trim();
         }
 
-        return ASCIIEncoding.ASCII.GetString(stringBytes.ToArray()).Trim();
     }
-
-    #endregion
-
-
-    #region Structs
-
-    internal struct OperatingModeResult
-    {
-        internal byte Status;
-        internal byte Mode;
-        internal ushort FatalErrorData;
-        internal ushort NonFatalErrorData;
-        internal byte ErrorCode;
-        internal string ErrorMessage;
-    }
-
-    #endregion
-}
 }

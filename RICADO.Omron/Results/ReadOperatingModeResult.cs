@@ -1,6 +1,6 @@
 ﻿namespace RICADO.Omron.Results
 {
-    public struct ReadOperatingModeResult
+    public class ReadOperatingModeResult
     {
         public int BytesSent;
         public int PacketsSent;
