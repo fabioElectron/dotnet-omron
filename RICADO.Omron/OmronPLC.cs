@@ -24,7 +24,7 @@ namespace RICADO.Omron
 
         #region Internal Properties
 
-        internal EthernetChannel Channel { get; private set; }
+        internal EthernetTCPChannel Channel { get; private set; }
 
         internal bool IsNSeries => _plcType switch
         {
@@ -56,8 +56,6 @@ namespace RICADO.Omron
 
         public byte RemoteNodeID { get; private set; }
 
-        public ConnectionMethods ConnectionMethod { get; private set; }
-
         public string RemoteHost { get; private set; }
 
         public int Port { get; private set; } = 9600;
@@ -72,7 +70,7 @@ namespace RICADO.Omron
         {
             get
             {
-                lock(_isInitializedLock)
+                lock (_isInitializedLock)
                 {
                     return _isInitialized;
                 }
@@ -91,14 +89,14 @@ namespace RICADO.Omron
 
         #region Ctor and Dispose
 
-        public OmronPLC(byte localNodeId, byte remoteNodeId, ConnectionMethods connectionMethod, string remoteHost, int port = 9600, int timeout = 2000, int retries = 1)
+        public OmronPLC(byte localNodeId, byte remoteNodeId, string remoteHost, int port = 9600, int timeout = 2000, int retries = 1)
         {
-            if(localNodeId == 0)
+            if (localNodeId == 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(localNodeId), "The Local Node ID cannot be set to 0");
             }
 
-            if(localNodeId == 255)
+            if (localNodeId == 255)
             {
                 throw new ArgumentOutOfRangeException(nameof(localNodeId), "The Local Node ID cannot be set to 255");
             }
@@ -115,42 +113,40 @@ namespace RICADO.Omron
                 throw new ArgumentOutOfRangeException(nameof(remoteNodeId), "The Remote Node ID cannot be set to 255");
             }
 
-            if(remoteNodeId == localNodeId)
+            if (remoteNodeId == localNodeId)
             {
                 throw new ArgumentException("The Remote Node ID cannot be the same as the Local Node ID", nameof(remoteNodeId));
             }
 
             RemoteNodeID = remoteNodeId;
 
-            ConnectionMethod = connectionMethod;
-
             if (remoteHost == null)
             {
                 throw new ArgumentNullException(nameof(remoteHost), "The Remote Host cannot be Null");
             }
 
-            if(remoteHost.Length == 0)
+            if (remoteHost.Length == 0)
             {
                 throw new ArgumentException("The Remote Host cannot be Empty", nameof(remoteHost));
             }
 
             RemoteHost = remoteHost;
 
-            if(port <= 0)
+            if (port <= 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(port), "The Port cannot be less than 1");
             }
 
             Port = port;
 
-            if(timeout <= 0)
+            if (timeout <= 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(timeout), "The Timeout Value cannot be less than 1");
             }
 
             Timeout = timeout;
 
-            if(retries < 0)
+            if (retries < 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(retries), "The Retries Value cannot be Negative");
             }
@@ -214,52 +210,28 @@ namespace RICADO.Omron
             }
 
             // Initialize the Channel
-            if (ConnectionMethod == ConnectionMethods.UDP)
+            try
             {
-                try
-                {
-                    Channel = new EthernetUDPChannel(RemoteHost, Port);
+                Channel = new EthernetTCPChannel(RemoteHost, Port);
 
-                    await Channel.InitializeAsync(Timeout, cancellationToken);
-                }
-                catch (ObjectDisposedException)
-                {
-                    throw new OmronException("Failed to Create the Ethernet UDP Communication Channel for Omron PLC '" + RemoteHost + ":" + Port + "' - The underlying Socket Connection has been Closed");
-                }
-                catch (TimeoutException)
-                {
-                    throw new OmronException("Failed to Create the Ethernet UDP Communication Channel within the Timeout Period for Omron PLC '" + RemoteHost + ":" + Port + "'");
-                }
-                catch (System.Net.Sockets.SocketException e)
-                {
-                    throw new OmronException("Failed to Create the Ethernet UDP Communication Channel for Omron PLC '" + RemoteHost + ":" + Port + "'", e);
-                }
+                await Channel.InitializeAsync(Timeout, cancellationToken);
             }
-            else if (ConnectionMethod == ConnectionMethods.TCP)
+            catch (ObjectDisposedException)
             {
-                try
-                {
-                    Channel = new EthernetTCPChannel(RemoteHost, Port);
-
-                    await Channel.InitializeAsync(Timeout, cancellationToken);
-                }
-                catch (ObjectDisposedException)
-                {
-                    throw new OmronException("Failed to Create the Ethernet TCP Communication Channel for Omron PLC '" + RemoteHost + ":" + Port + "' - The underlying Socket Connection has been Closed");
-                }
-                catch (TimeoutException)
-                {
-                    throw new OmronException("Failed to Create the Ethernet TCP Communication Channel within the Timeout Period for Omron PLC '" + RemoteHost + ":" + Port + "'");
-                }
-                catch (System.Net.Sockets.SocketException e)
-                {
-                    throw new OmronException("Failed to Create the Ethernet TCP Communication Channel for Omron PLC '" + RemoteHost + ":" + Port + "'", e);
-                }
+                throw new OmronException("Failed to Create the Ethernet TCP Communication Channel for Omron PLC '" + RemoteHost + ":" + Port + "' - The underlying Socket Connection has been Closed");
+            }
+            catch (TimeoutException)
+            {
+                throw new OmronException("Failed to Create the Ethernet TCP Communication Channel within the Timeout Period for Omron PLC '" + RemoteHost + ":" + Port + "'");
+            }
+            catch (System.Net.Sockets.SocketException e)
+            {
+                throw new OmronException("Failed to Create the Ethernet TCP Communication Channel for Omron PLC '" + RemoteHost + ":" + Port + "'", e);
             }
 
             await RequestControllerInformation(cancellationToken);
 
-            lock(_isInitializedLock)
+            lock (_isInitializedLock)
             {
                 _isInitialized = true;
             }
@@ -272,14 +244,14 @@ namespace RICADO.Omron
 
         public async Task<ReadBitsResult> ReadBitsAsync(ushort address, byte startBitIndex, byte length, MemoryBitDataType dataType, CancellationToken cancellationToken)
         {
-            lock(_isInitializedLock)
+            lock (_isInitializedLock)
             {
-                if(_isInitialized == false)
+                if (_isInitialized == false)
                 {
                     throw new OmronException("This Omron PLC must be Initialized first before any Requests can be Processed");
                 }
             }
-            
+
             if (startBitIndex > 15)
             {
                 throw new ArgumentOutOfRangeException(nameof(startBitIndex), "The Start Bit Index cannot be greater than 15");
@@ -391,13 +363,13 @@ namespace RICADO.Omron
             {
                 throw new ArgumentOutOfRangeException(nameof(startBitIndex), "The Start Bit Index cannot be greater than 15");
             }
-            
-            if(values.Length == 0)
+
+            if (values.Length == 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(values), "The Values Array cannot be Empty");
             }
 
-            if(startBitIndex + values.Length > 16)
+            if (startBitIndex + values.Length > 16)
             {
                 throw new ArgumentOutOfRangeException(nameof(values), "The Values Array Length was greater than the Maximum Allowed of 16 Bits");
             }
@@ -448,7 +420,7 @@ namespace RICADO.Omron
                 throw new ArgumentOutOfRangeException(nameof(values), "The Values Array cannot be Empty");
             }
 
-            if(values.Length > MaximumWriteWordLength)
+            if (values.Length > MaximumWriteWordLength)
             {
                 throw new ArgumentOutOfRangeException(nameof(values), "The Values Array Length cannot be greater than " + MaximumWriteWordLength.ToString());
             }
@@ -538,16 +510,16 @@ namespace RICADO.Omron
                 throw new ArgumentOutOfRangeException(nameof(newDateTime), "The Date Time Value cannot be greater than '" + maxDateTime.ToString() + "'");
             }
 
-            if(newDayOfWeek < 0)
+            if (newDayOfWeek < 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(newDayOfWeek), "The Day of Week Value cannot be less than 0");
             }
 
-            if(newDayOfWeek > 6)
+            if (newDayOfWeek > 6)
             {
                 throw new ArgumentOutOfRangeException(nameof(newDayOfWeek), "The Day of Week Value cannot be greater than 6");
             }
-            
+
             WriteClockRequest request = new WriteClockRequest(this, newDateTime, (byte)newDayOfWeek);
 
             ProcessRequestResult requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
@@ -719,7 +691,7 @@ namespace RICADO.Omron
 
             CPUUnitDataResult result = ReadCPUUnitDataResponse.ExtractData(requestResult.Response);
 
-            if(result.ControllerModel != null && result.ControllerModel.Length > 0)
+            if (result.ControllerModel != null && result.ControllerModel.Length > 0)
             {
                 ControllerModel = result.ControllerModel;
 
@@ -747,19 +719,19 @@ namespace RICADO.Omron
                 {
                     _plcType = PlcTypes.NX701;
                 }
-                else if(ControllerModel.StartsWith("NJ") || ControllerModel.StartsWith("NX") || ControllerModel.StartsWith("NY"))
+                else if (ControllerModel.StartsWith("NJ") || ControllerModel.StartsWith("NX") || ControllerModel.StartsWith("NY"))
                 {
                     _plcType = PlcTypes.NJ_NX_NY_Series;
                 }
-                else if(ControllerModel.StartsWith("CJ2"))
+                else if (ControllerModel.StartsWith("CJ2"))
                 {
                     _plcType = PlcTypes.CJ2;
                 }
-                else if(ControllerModel.StartsWith("CP1"))
+                else if (ControllerModel.StartsWith("CP1"))
                 {
                     _plcType = PlcTypes.CP1;
                 }
-                else if(ControllerModel.StartsWith("C"))
+                else if (ControllerModel.StartsWith("C"))
                 {
                     _plcType = PlcTypes.C_Series;
                 }
@@ -769,13 +741,13 @@ namespace RICADO.Omron
                 }
             }
 
-            if(result.ControllerVersion != null && result.ControllerVersion.Length > 0)
+            if (result.ControllerVersion != null && result.ControllerVersion.Length > 0)
             {
                 ControllerVersion = result.ControllerVersion;
             }
         }
 
-        
+
 
         #endregion
 

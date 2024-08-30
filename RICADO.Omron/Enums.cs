@@ -1,10 +1,5 @@
 ﻿namespace RICADO.Omron
 {
-    public enum ConnectionMethods
-    {
-        TCP,
-        UDP,
-    }
     
     public enum PlcTypes
     {

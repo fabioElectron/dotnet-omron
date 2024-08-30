@@ -53,7 +53,7 @@ namespace RICADO.Omron.Requests
             return bytes;
         }
 
-        internal ReadOnlyMemory<byte> BuildMessage(byte requestId)
+        internal byte[] BuildMessage(byte requestId)
         {
             ServiceID = requestId;
             var bytes = new byte[HEADER_LENGTH + 2 + Body.Length];
@@ -62,7 +62,7 @@ namespace RICADO.Omron.Requests
             bytes[HEADER_LENGTH] = FunctionCode;// Main Function Code
             bytes[HEADER_LENGTH + 1] = SubFunctionCode;// Sub Function Code
             Array.Copy(Body, 0, bytes, HEADER_LENGTH + 2, Body.Length);// Request Data
-            return new ReadOnlyMemory<byte>(bytes);
+            return bytes;
         }
 
     }
