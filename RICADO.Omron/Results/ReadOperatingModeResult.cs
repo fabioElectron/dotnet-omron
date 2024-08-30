@@ -1,4 +1,4 @@
-﻿namespace RICADO.Omron
+﻿namespace RICADO.Omron.Results
 {
     public struct ReadOperatingModeResult
     {

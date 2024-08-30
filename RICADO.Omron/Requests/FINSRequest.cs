@@ -1,161 +1,69 @@
 ﻿using System;
-using System.Collections.Generic;
 using RICADO.Omron.Channels;
 
 namespace RICADO.Omron.Requests
 {
     internal abstract class FINSRequest
     {
-        #region Constants
 
         internal const int HEADER_LENGTH = 10;
         internal const int COMMAND_LENGTH = 2;
 
-        #endregion
+        protected byte LocalNodeID { get; private set; }
+        protected byte RemoteNodeID { get; private set; }
+        protected byte[] Body;
 
 
-        #region Private Properties
+        internal byte ServiceID { get; private set; }
+        internal byte FunctionCode {  get; set; }
+        internal byte SubFunctionCode { get; set; }
 
-        private byte _localNodeId;
-        private byte _remoteNodeId;
-
-        private byte _serviceId;
-
-        private byte _functionCode;
-        private byte _subFunctionCode;
-
-        #endregion
-
-
-        #region Internal Properties
-
-        internal byte LocalNodeID => _localNodeId;
-
-        internal byte RemoteNodeID => _remoteNodeId;
-
-        internal byte ServiceID => _serviceId;
-
-        internal byte FunctionCode
+        protected FINSRequest(OmronPLC plc, byte functionCode, byte subFunctionCode)
         {
-            get
+            if (plc.Channel is EthernetTCPChannel)
             {
-                return _functionCode;
-            }
-            set
-            {
-                _functionCode = value;
-            }
-        }
-
-        internal byte SubFunctionCode
-        {
-            get
-            {
-                return _subFunctionCode;
-            }
-            set
-            {
-                _subFunctionCode = value;
-            }
-        }
-
-        #endregion
-
-
-        #region Constructors
-
-        protected FINSRequest(OmronPLC plc)
-        {
-            if(plc.Channel is EthernetTCPChannel)
-            {
-                _localNodeId = (plc.Channel as EthernetTCPChannel).LocalNodeID;
-                _remoteNodeId = (plc.Channel as EthernetTCPChannel).RemoteNodeID;
+                LocalNodeID = (plc.Channel as EthernetTCPChannel).LocalNodeID;
+                RemoteNodeID = (plc.Channel as EthernetTCPChannel).RemoteNodeID;
             }
             else
             {
-                _localNodeId = plc.LocalNodeID;
-                _remoteNodeId = plc.RemoteNodeID;
+                LocalNodeID = plc.LocalNodeID;
+                RemoteNodeID = plc.RemoteNodeID;
             }
+
+            FunctionCode = functionCode;
+            SubFunctionCode = subFunctionCode;
         }
 
-        #endregion
-
-
-        #region Internal Methods
+        private byte[] Header()
+        {
+            var bytes = new byte[HEADER_LENGTH]
+            {
+                0x80,// Information Control Field
+                0x00,// Reserved by System
+                0x02,// Permissible Number of Gateways
+                0x00,// Destination Network Address - 0 = Local Network
+                RemoteNodeID,// Destination Node Address - 0 = Local PLC Unit - 1 to 254 = Destination Node Address - 255 = Broadcasting
+                0x00,// Destination Unit Address - 0 = PLC (CPU Unit)
+                0x00,// Source Network Address - 0 = Local Network
+                LocalNodeID,// Source Node Address - Local Server
+                0x00,// Source Unit Address
+                ServiceID// Service ID
+            };
+            return bytes;
+        }
 
         internal ReadOnlyMemory<byte> BuildMessage(byte requestId)
         {
-            _serviceId = requestId;
-            
-            List<byte> message = new List<byte>();
-
-            /**
-             * Header Section
-             */
-
-            // Information Control Field
-            message.Add(0x80);
-
-            // Reserved by System
-            message.Add(0);
-
-            // Permissible Number of Gateways
-            message.Add(0x02);
-
-            // Destination Network Address
-            message.Add(0); // Local Network
-
-            // Destination Node Address
-            // 0 = Local PLC Unit
-            // 1 to 254 = Destination Node Address
-            // 255 = Broadcasting
-            message.Add(_remoteNodeId);
-
-            // Destination Unit Address
-            message.Add(0); // PLC (CPU Unit)
-
-            // Source Network Address
-            message.Add(0); // Local Network
-
-            // Source Node Address
-            message.Add(_localNodeId); // Local Server
-
-            // Source Unit Address
-            message.Add(0);
-
-            // Service ID
-            message.Add(_serviceId);
-
-
-            /**
-             * Command Section
-             */
-
-            // Main Function Code
-            message.Add(_functionCode);
-
-            // Sub Function Code
-            message.Add(_subFunctionCode);
-
-
-            /**
-             * Data Section
-             */
-
-            // Request Data
-            message.AddRange(BuildRequestData());
-
-
-            return new ReadOnlyMemory<byte>(message.ToArray());
+            ServiceID = requestId;
+            var bytes = new byte[HEADER_LENGTH + 2 + Body.Length];
+            var header = Header();
+            Array.Copy(header, 0, bytes, 0, HEADER_LENGTH);
+            bytes[HEADER_LENGTH] = FunctionCode;// Main Function Code
+            bytes[HEADER_LENGTH + 1] = SubFunctionCode;// Sub Function Code
+            Array.Copy(Body, 0, bytes, HEADER_LENGTH + 2, Body.Length);// Request Data
+            return new ReadOnlyMemory<byte>(bytes);
         }
 
-        #endregion
-
-
-        #region Protected Methods
-
-        protected abstract List<byte> BuildRequestData();
-
-        #endregion
     }
 }
