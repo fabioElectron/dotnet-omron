@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using RICADO.Omron.Requests;
 using RICADO.Omron.Responses;
-using RICADO.Sockets;
 
 namespace RICADO.Omron.Channels
 {
@@ -192,9 +192,9 @@ namespace RICADO.Omron.Channels
 
         private async Task InitializeClientAsync(int timeout, CancellationToken cancellationToken)
         {
-            _client = new TcpClient(RemoteHost, Port);
+            _client = new TcpClient();
 
-            await _client.ConnectAsync(timeout, cancellationToken);
+            await _client.ConnectAsync(RemoteHost, Port, cancellationToken);
 
             try
             {
@@ -252,7 +252,7 @@ namespace RICADO.Omron.Channels
                 {
                     try
                     {
-                        await _client.ReceiveAsync(buffer, timeout, cancellationToken);
+                        await _client.Client.ReceiveAsync(buffer, cancellationToken);
                     }
                     catch
                     {
@@ -291,7 +291,7 @@ namespace RICADO.Omron.Channels
 
             try
             {
-                result.Bytes += await _client.SendAsync(tcpMessage, timeout, cancellationToken);
+                result.Bytes += await _client.Client.SendAsync(tcpMessage, cancellationToken);
                 result.Packets += 1;
             }
             catch (ObjectDisposedException)
@@ -331,7 +331,7 @@ namespace RICADO.Omron.Channels
 
                     if (receiveTimeout.TotalMilliseconds >= 50)
                     {
-                        int receivedBytes = await _client.ReceiveAsync(buffer, receiveTimeout, cancellationToken);
+                        int receivedBytes = await _client.Client.ReceiveAsync(buffer, cancellationToken);
 
                         if (receivedBytes > 0)
                         {
@@ -426,7 +426,7 @@ namespace RICADO.Omron.Channels
 
                         if (receiveTimeout.TotalMilliseconds >= 50)
                         {
-                            int receivedBytes = await _client.ReceiveAsync(buffer, receiveTimeout, cancellationToken);
+                            int receivedBytes = await _client.Client.ReceiveAsync(buffer, cancellationToken);
 
                             if (receivedBytes > 0)
                             {
