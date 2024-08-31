@@ -16,7 +16,8 @@ namespace RICADO.Omron.Channels
 
         private byte _requestId = 0;
         private TcpClient _client;
-        private object _lock = new object();
+        private SemaphoreSlim _semaphore;
+        private bool disposedValue;
 
         internal string RemoteHost { get; }
         internal int Port { get; }
@@ -29,11 +30,37 @@ namespace RICADO.Omron.Channels
         {
             RemoteHost = remoteHost;
             Port = port;
+            _semaphore = new SemaphoreSlim(1, 1);
         }
+
+        private void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    // TODO: dispose managed state (managed objects)
+                }
+
+                DestroyClient();
+                // TODO: free unmanaged resources (unmanaged objects) and override finalizer
+                // TODO: set large fields to null
+                disposedValue = true;
+            }
+        }
+
+        // // TODO: override finalizer only if 'Dispose(bool disposing)' has code to free unmanaged resources
+        // ~EthernetTCPChannel()
+        // {
+        //     // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        //     Dispose(disposing: false);
+        // }
 
         public void Dispose()
         {
-            DestroyClient();
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
 
         #endregion
@@ -42,12 +69,19 @@ namespace RICADO.Omron.Channels
 
         internal async Task InitializeAsync(int timeout, CancellationToken cancellationToken)
         {
-            bool lockTaken = false;
-            Monitor.Enter(_lock, ref lockTaken);
             try
             {
-                DestroyClient();
-                await InitializeClient(timeout, cancellationToken);
+                await _semaphore.WaitAsync(cancellationToken);
+                try
+                {
+                    DestroyClient();
+                    await InitializeClientAsync(timeout, cancellationToken);
+                }
+                finally
+                {
+                    _semaphore.Release();
+                }
+
             }
             catch (ObjectDisposedException)
             {
@@ -61,11 +95,6 @@ namespace RICADO.Omron.Channels
             {
                 throw new OmronException("Failed to Re-Connect to Omron PLC '" + RemoteHost + ":" + Port + "'", e);
             }
-            finally
-            {
-                if (lockTaken)
-                    Monitor.Exit(_lock);
-            }
         }
 
         internal async Task<ProcessRequestResult> ProcessRequestAsync(FINSRequest request, int timeout, int retries, CancellationToken cancellationToken)
@@ -78,82 +107,72 @@ namespace RICADO.Omron.Channels
             int packetsReceived = 0;
             DateTime startTimestamp = DateTime.UtcNow;
 
-            while (attempts <= retries)
-            {
-                bool lockTaken = false;
-                Monitor.Enter(_lock, ref lockTaken);
-                try
-                {
-                    if (attempts > 0)
-                    {
-                        await InitializeAsync(timeout, cancellationToken);
-                    }
-
-                    // Build the Request into a Message we can Send
-                    byte[] requestMessage = request.BuildMessage(GetNextRequestId());
-
-                    // Send the Message
-                    SendMessageResult sendResult = await SendMessageAsync(TcpCommandCode.FINSFrame, requestMessage, timeout, cancellationToken);
-
-                    bytesSent += sendResult.Bytes;
-                    packetsSent += sendResult.Packets;
-
-                    // Receive a Response
-                    ReceiveMessageResult receiveResult = await ReceiveMessageAsync(TcpCommandCode.FINSFrame, timeout, cancellationToken);
-
-                    bytesReceived += receiveResult.Bytes;
-                    packetsReceived += receiveResult.Packets;
-                    responseMessage = receiveResult.Message;
-
-                    break;
-                }
-                catch (Exception)
-                {
-                    if (attempts >= retries)
-                    {
-                        throw;
-                    }
-                }
-                finally
-                {
-                    if (lockTaken)
-                        Monitor.Exit(_lock);
-                }
-
-                // Increment the Attempts
-                attempts++;
-            }
-
+            await _semaphore.WaitAsync(cancellationToken);
             try
             {
-                return new ProcessRequestResult
+                while (attempts <= retries)
                 {
-                    BytesSent = bytesSent,
-                    PacketsSent = packetsSent,
-                    BytesReceived = bytesReceived,
-                    PacketsReceived = packetsReceived,
-                    Duration = DateTime.UtcNow.Subtract(startTimestamp).TotalMilliseconds,
-                    Response = FINSResponse.CreateNew(responseMessage, request),
-                };
-            }
-            catch (FINSException e)
-            {
-                if (e.Message.Contains("Service ID") && responseMessage.Length >= 9 && responseMessage.Span[9] != request.ServiceID)
-                {
-                    bool lockTaken = false;
-                    Monitor.Enter(_lock, ref lockTaken);
                     try
                     {
-                        await PurgeReceiveBuffer(timeout, cancellationToken);
+                        if (attempts > 0)
+                        {
+                            await InitializeAsync(timeout, cancellationToken);
+                        }
+
+                        // Build the Request into a Message we can Send
+                        byte[] requestMessage = request.BuildMessage(GetNextRequestId());
+
+                        // Send the Message
+                        SendMessageResult sendResult = await SendMessageAsync(TcpCommandCode.FINSFrame, requestMessage, timeout, cancellationToken);
+
+                        bytesSent += sendResult.Bytes;
+                        packetsSent += sendResult.Packets;
+
+                        // Receive a Response
+                        ReceiveMessageResult receiveResult = await ReceiveMessageAsync(TcpCommandCode.FINSFrame, timeout, cancellationToken);
+                        bytesReceived += receiveResult.Bytes;
+                        packetsReceived += receiveResult.Packets;
+                        responseMessage = receiveResult.Message;
+
+                        break;
                     }
-                    finally
+                    catch (Exception)
                     {
-                        if (lockTaken)
-                            Monitor.Exit(_lock);
+                        if (attempts >= retries)
+                        {
+                            throw;
+                        }
                     }
+
+                    // Increment the Attempts
+                    attempts++;
                 }
 
-                throw new OmronException("Received a FINS Error Response from Omron PLC '" + RemoteHost + ":" + Port + "'", e);
+                try
+                {
+                    return new ProcessRequestResult
+                    {
+                        BytesSent = bytesSent,
+                        PacketsSent = packetsSent,
+                        BytesReceived = bytesReceived,
+                        PacketsReceived = packetsReceived,
+                        Duration = DateTime.UtcNow.Subtract(startTimestamp).TotalMilliseconds,
+                        Response = FINSResponse.CreateNew(responseMessage, request),
+                    };
+                }
+                catch (FINSException e)
+                {
+                    if (e.Message.Contains("Service ID") && responseMessage.Length >= 9 && responseMessage.Span[9] != request.ServiceID)
+                    {
+                        PurgeReceiveBuffer(timeout, cancellationToken).Wait(cancellationToken);
+                    }
+
+                    throw new OmronException("Received a FINS Error Response from Omron PLC '" + RemoteHost + ":" + Port + "'", e);
+                }
+            }
+            finally
+            {
+                _semaphore.Release();
             }
         }
 
@@ -171,7 +190,7 @@ namespace RICADO.Omron.Channels
             }
         }
 
-        private async Task InitializeClient(int timeout, CancellationToken cancellationToken)
+        private async Task InitializeClientAsync(int timeout, CancellationToken cancellationToken)
         {
             _client = new TcpClient(RemoteHost, Port);
 
@@ -449,11 +468,16 @@ namespace RICADO.Omron.Channels
             {
                 throw new OmronException("Failed to Receive FINS Message from Omron PLC '" + RemoteHost + ":" + Port + "'", e);
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                throw;
+            }
 
             return result;
         }
 
-        private ReadOnlyMemory<byte> BuildFinsTcpMessage(TcpCommandCode command, byte[] message)
+        private static ReadOnlyMemory<byte> BuildFinsTcpMessage(TcpCommandCode command, byte[] message)
         {
             var bytes = Enumerable.Repeat((byte)0x00, 16 + message.Length).ToArray();
             // FINS Message Identifier
