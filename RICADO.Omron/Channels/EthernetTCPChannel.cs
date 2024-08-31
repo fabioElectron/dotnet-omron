@@ -19,11 +19,15 @@ namespace RICADO.Omron.Channels
         private TcpClient _client;
         private SemaphoreSlim _semaphore;
         private bool disposedValue;
+        private byte errorCounter = 0;
+        private bool initOk = false;
 
         internal string RemoteHost { get; }
         internal int Port { get; }
         internal byte LocalNodeID { get; private set; }
         internal byte RemoteNodeID { get; private set; }
+
+        internal event EventHandler NeedReinit;
 
         #region ctor and dispose
 
@@ -70,6 +74,7 @@ namespace RICADO.Omron.Channels
 
         internal async Task InitializeAsync(int timeout, CancellationToken cancellationToken)
         {
+            initOk = false;
             try
             {
                 if (await _semaphore.WaitAsync(timeout, cancellationToken))
@@ -78,6 +83,8 @@ namespace RICADO.Omron.Channels
                     {
                         DestroyClient();
                         await InitializeClientAsync(timeout, cancellationToken);
+                        errorCounter = 0;
+                        initOk = true;
                     }
                     finally
                     {
@@ -105,6 +112,9 @@ namespace RICADO.Omron.Channels
 
         internal async Task<ProcessRequestResult> ProcessRequestAsync(FINSRequest request, int timeout, int retries, CancellationToken cancellationToken)
         {
+            if(!initOk)
+                throw new OmronException("This Omron PLC must be Initialized first before any Requests can be Processed");
+
             int attempts = 0;
             Memory<byte> responseMessage = new Memory<byte>();
             int bytesSent = 0;
@@ -157,7 +167,10 @@ namespace RICADO.Omron.Channels
                     }
 
                     if (attempts > retries)
+                    {
+                        IncrementErrorCounter(timeout, cancellationToken);
                         throw new OmronException("Max retries");
+                    }
 
                     try
                     {
@@ -177,7 +190,7 @@ namespace RICADO.Omron.Channels
                         {
                             PurgeReceiveBuffer(timeout, cancellationToken).Wait(cancellationToken);
                         }
-
+                        IncrementErrorCounter(timeout, cancellationToken);
                         throw new OmronException("Received a FINS Error Response from Omron PLC '" + RemoteHost + ":" + Port + "'", e);
                     }
                 }
@@ -188,11 +201,22 @@ namespace RICADO.Omron.Channels
             }
             else
             {
+                IncrementErrorCounter(timeout, cancellationToken);
                 throw new TimeoutException("Timeout out waiting for semaphore");
             }
+
         }
 
         #endregion
+
+        private void IncrementErrorCounter(int timeout, CancellationToken cancellationToken)
+        {
+            errorCounter++;
+            if (errorCounter >= 5)
+            { 
+                NeedReinit?.Invoke(this, EventArgs.Empty);
+            }
+        }
 
         private void DestroyClient()
         {

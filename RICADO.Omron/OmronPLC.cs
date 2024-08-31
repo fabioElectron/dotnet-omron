@@ -87,6 +87,8 @@ namespace RICADO.Omron
 
         #endregion
 
+        public event EventHandler NeedReinit;
+
         #region Ctor and Dispose
 
         public OmronPLC(byte localNodeId, byte remoteNodeId, string remoteHost, int port = 9600, int timeout = 2000, int retries = 1)
@@ -213,6 +215,7 @@ namespace RICADO.Omron
             try
             {
                 Channel = new EthernetTCPChannel(RemoteHost, Port);
+                (Channel as EthernetTCPChannel).NeedReinit += OmronPLC_NeedReinit;
 
                 await Channel.InitializeAsync(Timeout, cancellationToken);
             }
@@ -624,6 +627,11 @@ namespace RICADO.Omron
         #endregion
 
         #region Private Methods
+
+        private void OmronPLC_NeedReinit(object sender, EventArgs e)
+        {
+            NeedReinit?.Invoke(this, e);
+        }
 
         private bool ValidateBitAddress(ushort address, MemoryBitDataType dataType)
         {
