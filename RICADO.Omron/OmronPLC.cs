@@ -299,6 +299,7 @@ namespace RICADO.Omron
 
         public async Task<ReadWordsResult> ReadWordsAsync(ushort startAddress, ushort length, MemoryWordDataType dataType, CancellationToken cancellationToken)
         {
+            #region checks
             lock (_isInitializedLock)
             {
                 if (_isInitialized == false)
@@ -326,6 +327,7 @@ namespace RICADO.Omron
             {
                 throw new ArgumentOutOfRangeException(nameof(startAddress), "The Start Address and Length combined are greater than the Maximum Address for the '" + Enum.GetName(typeof(MemoryWordDataType), dataType) + "' Data Type");
             }
+            #endregion
 
             ReadMemoryAreaWordRequest request = new ReadMemoryAreaWordRequest(this, startAddress, length, dataType);
 

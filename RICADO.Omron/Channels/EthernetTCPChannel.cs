@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
@@ -71,17 +72,22 @@ namespace RICADO.Omron.Channels
         {
             try
             {
-                await _semaphore.WaitAsync(cancellationToken);
-                try
+                if (await _semaphore.WaitAsync(timeout, cancellationToken))
                 {
-                    DestroyClient();
-                    await InitializeClientAsync(timeout, cancellationToken);
+                    try
+                    {
+                        DestroyClient();
+                        await InitializeClientAsync(timeout, cancellationToken);
+                    }
+                    finally
+                    {
+                        _semaphore.Release();
+                    }
                 }
-                finally
+                else
                 {
-                    _semaphore.Release();
+                    throw new TimeoutException("Timeout out waiting for semaphore");
                 }
-
             }
             catch (ObjectDisposedException)
             {
@@ -107,72 +113,82 @@ namespace RICADO.Omron.Channels
             int packetsReceived = 0;
             DateTime startTimestamp = DateTime.UtcNow;
 
-            await _semaphore.WaitAsync(cancellationToken);
-            try
+            if (await _semaphore.WaitAsync(timeout, cancellationToken))
             {
-                while (attempts <= retries)
-                {
-                    try
-                    {
-                        if (attempts > 0)
-                        {
-                            await InitializeAsync(timeout, cancellationToken);
-                        }
-
-                        // Build the Request into a Message we can Send
-                        byte[] requestMessage = request.BuildMessage(GetNextRequestId());
-
-                        // Send the Message
-                        SendMessageResult sendResult = await SendMessageAsync(TcpCommandCode.FINSFrame, requestMessage, timeout, cancellationToken);
-
-                        bytesSent += sendResult.Bytes;
-                        packetsSent += sendResult.Packets;
-
-                        // Receive a Response
-                        ReceiveMessageResult receiveResult = await ReceiveMessageAsync(TcpCommandCode.FINSFrame, timeout, cancellationToken);
-                        bytesReceived += receiveResult.Bytes;
-                        packetsReceived += receiveResult.Packets;
-                        responseMessage = receiveResult.Message;
-
-                        break;
-                    }
-                    catch (Exception)
-                    {
-                        if (attempts >= retries)
-                        {
-                            throw;
-                        }
-                    }
-
-                    // Increment the Attempts
-                    attempts++;
-                }
-
                 try
                 {
-                    return new ProcessRequestResult
+                    while (attempts <= retries)
                     {
-                        BytesSent = bytesSent,
-                        PacketsSent = packetsSent,
-                        BytesReceived = bytesReceived,
-                        PacketsReceived = packetsReceived,
-                        Duration = DateTime.UtcNow.Subtract(startTimestamp).TotalMilliseconds,
-                        Response = FINSResponse.CreateNew(responseMessage, request),
-                    };
-                }
-                catch (FINSException e)
-                {
-                    if (e.Message.Contains("Service ID") && responseMessage.Length >= 9 && responseMessage.Span[9] != request.ServiceID)
-                    {
-                        PurgeReceiveBuffer(timeout, cancellationToken).Wait(cancellationToken);
+                        try
+                        {
+                            if (attempts > 0)
+                            {
+                                await InitializeAsync(timeout, cancellationToken);
+                            }
+
+                            //Stopwatch sw = Stopwatch.StartNew();
+
+                            // Build the Request into a Message we can Send
+                            byte[] requestMessage = request.BuildMessage(GetNextRequestId());
+
+                            // Send the Message
+                            SendMessageResult sendResult = await SendMessageAsync(TcpCommandCode.FINSFrame, requestMessage, timeout, cancellationToken);
+
+                            bytesSent += sendResult.Bytes;
+                            packetsSent += sendResult.Packets;
+
+                            // Receive a Response
+                            ReceiveMessageResult receiveResult = await ReceiveMessageAsync(TcpCommandCode.FINSFrame, timeout, cancellationToken);
+                            bytesReceived += receiveResult.Bytes;
+                            packetsReceived += receiveResult.Packets;
+                            responseMessage = receiveResult.Message;
+
+                            //sw.Stop();
+                            //Console.WriteLine($"PLC RTT {sw.ElapsedMilliseconds}ms");
+                            //sw = null;
+
+                            break;
+                        }
+                        catch (Exception)
+                        {
+                            // Increment the Attempts
+                            attempts++;
+                        }
                     }
 
-                    throw new OmronException("Received a FINS Error Response from Omron PLC '" + RemoteHost + ":" + Port + "'", e);
+                    if (attempts > retries)
+                        throw new OmronException("Max retries");
+
+                    try
+                    {
+                        return new ProcessRequestResult
+                        {
+                            BytesSent = bytesSent,
+                            PacketsSent = packetsSent,
+                            BytesReceived = bytesReceived,
+                            PacketsReceived = packetsReceived,
+                            Duration = DateTime.UtcNow.Subtract(startTimestamp).TotalMilliseconds,
+                            Response = FINSResponse.CreateNew(responseMessage, request),
+                        };
+                    }
+                    catch (FINSException e)
+                    {
+                        if (e.Message.Contains("Service ID") && responseMessage.Length >= 9 && responseMessage.Span[9] != request.ServiceID)
+                        {
+                            PurgeReceiveBuffer(timeout, cancellationToken).Wait(cancellationToken);
+                        }
+
+                        throw new OmronException("Received a FINS Error Response from Omron PLC '" + RemoteHost + ":" + Port + "'", e);
+                    }
+                }
+                finally
+                {
+                    _semaphore.Release();
                 }
             }
-            finally
+            else
             {
-                _semaphore.Release();
+                throw new TimeoutException("Timeout out waiting for semaphore");
             }
         }
 
@@ -327,19 +343,14 @@ namespace RICADO.Omron.Channels
                 while (DateTime.UtcNow.Subtract(startTimestamp).TotalMilliseconds < timeout && receivedData.Count < TCP_HEADER_LENGTH)
                 {
                     Memory<byte> buffer = new byte[4096];
-                    TimeSpan receiveTimeout = TimeSpan.FromMilliseconds(timeout).Subtract(DateTime.UtcNow.Subtract(startTimestamp));
+                    int receivedBytes = await _client.Client.ReceiveAsync(buffer, cancellationToken);
 
-                    if (receiveTimeout.TotalMilliseconds >= 50)
+                    if (receivedBytes > 0)
                     {
-                        int receivedBytes = await _client.Client.ReceiveAsync(buffer, cancellationToken);
+                        receivedData.AddRange(buffer.Slice(0, receivedBytes).ToArray());
 
-                        if (receivedBytes > 0)
-                        {
-                            receivedData.AddRange(buffer.Slice(0, receivedBytes).ToArray());
-
-                            result.Bytes += receivedBytes;
-                            result.Packets += 1;
-                        }
+                        result.Bytes += receivedBytes;
+                        result.Packets += 1;
                     }
                 }
 
