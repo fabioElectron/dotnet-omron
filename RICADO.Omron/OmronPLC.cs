@@ -183,11 +183,11 @@ namespace RICADO.Omron
         }
 
         // // TODO: override finalizer only if 'Dispose(bool disposing)' has code to free unmanaged resources
-        // ~OmronPLC()
-        // {
-        //     // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
-        //     Dispose(disposing: false);
-        // }
+        ~OmronPLC()
+        {
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: false);
+        }
 
         public void Dispose()
         {
@@ -412,6 +412,7 @@ namespace RICADO.Omron
 
         public async Task<WriteWordsResult> WriteWordsAsync(ushort[] values, ushort startAddress, MemoryWordDataType dataType, CancellationToken cancellationToken)
         {
+            #region checks
             lock (_isInitializedLock)
             {
                 if (_isInitialized == false)
@@ -439,6 +440,7 @@ namespace RICADO.Omron
             {
                 throw new ArgumentOutOfRangeException(nameof(startAddress), "The Start Address and Values Array Length combined are greater than the Maximum Address for the '" + Enum.GetName(typeof(MemoryWordDataType), dataType) + "' Data Type");
             }
+            #endregion
 
             WriteMemoryAreaWordRequest request = new WriteMemoryAreaWordRequest(this, startAddress, dataType, values);
 
