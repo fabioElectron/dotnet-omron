@@ -87,6 +87,8 @@ namespace RICADO.Omron
 
         #endregion
 
+        public event EventHandler NeedReinit;
+
         #region Ctor and Dispose
 
         public OmronPLC(byte localNodeId, byte remoteNodeId, string remoteHost, int port = 9600, int timeout = 2000, int retries = 1)
@@ -181,11 +183,11 @@ namespace RICADO.Omron
         }
 
         // // TODO: override finalizer only if 'Dispose(bool disposing)' has code to free unmanaged resources
-        // ~OmronPLC()
-        // {
-        //     // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
-        //     Dispose(disposing: false);
-        // }
+        ~OmronPLC()
+        {
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: false);
+        }
 
         public void Dispose()
         {
@@ -213,6 +215,7 @@ namespace RICADO.Omron
             try
             {
                 Channel = new EthernetTCPChannel(RemoteHost, Port);
+                (Channel as EthernetTCPChannel).NeedReinit += OmronPLC_NeedReinit;
 
                 await Channel.InitializeAsync(Timeout, cancellationToken);
             }
@@ -299,6 +302,7 @@ namespace RICADO.Omron
 
         public async Task<ReadWordsResult> ReadWordsAsync(ushort startAddress, ushort length, MemoryWordDataType dataType, CancellationToken cancellationToken)
         {
+            #region checks
             lock (_isInitializedLock)
             {
                 if (_isInitialized == false)
@@ -326,6 +330,7 @@ namespace RICADO.Omron
             {
                 throw new ArgumentOutOfRangeException(nameof(startAddress), "The Start Address and Length combined are greater than the Maximum Address for the '" + Enum.GetName(typeof(MemoryWordDataType), dataType) + "' Data Type");
             }
+            #endregion
 
             ReadMemoryAreaWordRequest request = new ReadMemoryAreaWordRequest(this, startAddress, length, dataType);
 
@@ -407,6 +412,7 @@ namespace RICADO.Omron
 
         public async Task<WriteWordsResult> WriteWordsAsync(ushort[] values, ushort startAddress, MemoryWordDataType dataType, CancellationToken cancellationToken)
         {
+            #region checks
             lock (_isInitializedLock)
             {
                 if (_isInitialized == false)
@@ -434,6 +440,7 @@ namespace RICADO.Omron
             {
                 throw new ArgumentOutOfRangeException(nameof(startAddress), "The Start Address and Values Array Length combined are greater than the Maximum Address for the '" + Enum.GetName(typeof(MemoryWordDataType), dataType) + "' Data Type");
             }
+            #endregion
 
             WriteMemoryAreaWordRequest request = new WriteMemoryAreaWordRequest(this, startAddress, dataType, values);
 
@@ -648,6 +655,11 @@ namespace RICADO.Omron
         #endregion
 
         #region Private Methods
+
+        private void OmronPLC_NeedReinit(object sender, EventArgs e)
+        {
+            NeedReinit?.Invoke(this, e);
+        }
 
         private bool ValidateBitAddress(ushort address, MemoryBitDataType dataType)
         {
