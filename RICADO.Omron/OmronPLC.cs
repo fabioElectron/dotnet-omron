@@ -85,6 +85,18 @@ namespace RICADO.Omron
 
         public ushort MaximumWriteWordLength => _plcType == PlcTypes.CP1 ? (ushort)496 : (ushort)996;
 
+        public byte DipSwitchStatus { get; private set; }
+        public byte EMBankCount { get; private set; }
+        public ushort ProgramAreaSizeKW { get; private set; }
+        public byte BitAreasSizeKB { get; private set; } // always 23
+        public ushort DMAreaSizeW { get; private set; } // always 32768
+        public byte TimersCount { get; private set; } // always 8
+        public byte EMBankCountNonFile { get; private set; } // 1 bank = 32768 words
+        public byte MemoryCardType { get; private set; } // 0 no memory card, 4 flash memory
+        public ushort MemoryCardSizeKB { get; private set; }
+
+
+
         #endregion
 
         public event EventHandler NeedReinit;
@@ -783,9 +795,16 @@ namespace RICADO.Omron
             {
                 ControllerVersion = result.ControllerVersion;
             }
+            DipSwitchStatus = result.DipSwitchStatus;
+            EMBankCount = result.EMBankCount;
+            ProgramAreaSizeKW = result.ProgramAreaSizeKW;
+            BitAreasSizeKB = result.BitAreasSizeKB;
+            DMAreaSizeW = result.DMAreaSizeW;
+            TimersCount = result.TimersCount;
+            EMBankCountNonFile = result.EMBankCountNonFile;
+            MemoryCardType = result.MemoryCardType;
+            MemoryCardSizeKB = result.MemoryCardSizeKB;
         }
-
-
 
         #endregion
 
