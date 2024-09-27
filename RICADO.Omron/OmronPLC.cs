@@ -64,7 +64,7 @@ namespace RICADO.Omron
 
         public int Retries { get; set; }
 
-        public PlcTypes PLCType { get; private set; }
+        public PlcTypes PLCType { get => _plcType; private set { _plcType = value; } }
 
         public bool IsInitialized
         {
@@ -609,7 +609,7 @@ namespace RICADO.Omron
             };
         }
 
-        public async Task<WriteOperatingModeResponse> WriteOperatingModeAsync(bool run, CancellationToken cancellationToken)
+        public async Task<WriteOperatingModeResponse> WriteOperatingModeAsync(bool run, bool monitor, CancellationToken cancellationToken)
         {
             lock (_isInitializedLock)
             {
@@ -619,7 +619,7 @@ namespace RICADO.Omron
                 }
             }
 
-            WriteOperatingModeRequest request = new WriteOperatingModeRequest(this, run);
+            WriteOperatingModeRequest request = new WriteOperatingModeRequest(this, run, monitor);
 
             ProcessRequestResult requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
 
