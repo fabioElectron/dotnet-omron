@@ -602,6 +602,32 @@ namespace RICADO.Omron
             };
         }
 
+        public async Task<WriteOperatingModeResponse> WriteOperatingModeAsync(bool run, CancellationToken cancellationToken)
+        {
+            lock (_isInitializedLock)
+            {
+                if (_isInitialized == false)
+                {
+                    throw new OmronException("This Omron PLC must be Initialized first before any Requests can be Processed");
+                }
+            }
+
+            WriteOperatingModeRequest request = new WriteOperatingModeRequest(this, run);
+
+            ProcessRequestResult requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
+
+            return new WriteOperatingModeResponse
+            {
+                BytesSent = requestResult.BytesSent,
+                PacketsSent = requestResult.PacketsSent,
+                BytesReceived = requestResult.BytesReceived,
+                PacketsReceived = requestResult.PacketsReceived,
+                Duration = requestResult.Duration,
+                MainResponseCode = requestResult.Response.MainResponseCode,
+                SubResponseCode = requestResult.Response.SubResponseCode
+            };
+        }
+
         public int GetAreaSize(MemoryWordDataType area)
         {
             return area switch
