@@ -89,7 +89,7 @@ namespace RICADO.Omron
         public byte EMBankCount { get; private set; }
         public ushort ProgramAreaSizeKW { get; private set; }
         public byte BitAreasSizeKB { get; private set; } // always 23
-        public ushort DMAreaSizeW { get; private set; } // always 32768
+        public ushort DMAreaSizeKW { get; private set; } // always 32768
         public byte TimersCount { get; private set; } // always 8
         public byte EMBankCountNonFile { get; private set; } // 1 bank = 32768 words
         public byte MemoryCardType { get; private set; } // 0 no memory card, 4 flash memory
@@ -244,6 +244,7 @@ namespace RICADO.Omron
                 throw new OmronException("Failed to Create the Ethernet TCP Communication Channel for Omron PLC '" + RemoteHost + ":" + Port + "'", e);
             }
 
+            // Get all controller info
             await RequestControllerInformation(cancellationToken);
 
             lock (_isInitializedLock)
@@ -656,10 +657,7 @@ namespace RICADO.Omron
                 MemoryWordDataType.Work => 512,
                 MemoryWordDataType.Holding => 1536,//TODO FB 512
                 MemoryWordDataType.Auxiliary => (_plcType == PlcTypes.CJ2 ? 11536 : 960),
-                MemoryWordDataType.ExtendedMemoryBank0 => 32768,
-                MemoryWordDataType.ExtendedMemoryBank1 => 32768,
-                MemoryWordDataType.ExtendedMemoryBank2 => 32768,
-                MemoryWordDataType.ExtendedMemoryBank3 => 32768,
+                MemoryWordDataType.ExtendedMemoryBank0 or MemoryWordDataType.ExtendedMemoryBank1 or MemoryWordDataType.ExtendedMemoryBank2 or MemoryWordDataType.ExtendedMemoryBank3 => 32768,
                 _ => 0,
             };
         }
@@ -799,7 +797,7 @@ namespace RICADO.Omron
             EMBankCount = result.EMBankCount;
             ProgramAreaSizeKW = result.ProgramAreaSizeKW;
             BitAreasSizeKB = result.BitAreasSizeKB;
-            DMAreaSizeW = result.DMAreaSizeW;
+            DMAreaSizeKW = result.DMAreaSizeKW;
             TimersCount = result.TimersCount;
             EMBankCountNonFile = result.EMBankCountNonFile;
             MemoryCardType = result.MemoryCardType;

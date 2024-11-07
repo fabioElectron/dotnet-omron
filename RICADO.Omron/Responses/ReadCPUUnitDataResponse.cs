@@ -13,7 +13,7 @@ namespace RICADO.Omron.Responses
         internal byte EMBankCount;
         internal ushort ProgramAreaSizeKW;
         internal byte BitAreasSizeKB; // always 23
-        internal ushort DMAreaSizeW; // always 32768
+        internal ushort DMAreaSizeKW; // always 32768
         internal byte TimersCount; // always 8
         internal byte EMBankCountNonFile; // 1 bank = 32768 words
         internal byte MemoryCardType; // 0 no memory card, 4 flash memory
@@ -42,15 +42,15 @@ namespace RICADO.Omron.Responses
             {
                 ControllerModel = ExtractStringValue(data.Slice(0, CONTROLLER_MODEL_LENGTH).ToArray()),
                 ControllerVersion = ExtractStringValue(data.Slice(CONTROLLER_MODEL_LENGTH, CONTROLLER_VERSION_LENGTH).ToArray()),
-                DipSwitchStatus = response.Data[CONTROLLER_MODEL_LENGTH + CONTROLLER_VERSION_LENGTH],
-                EMBankCount = response.Data[CONTROLLER_MODEL_LENGTH + CONTROLLER_VERSION_LENGTH + 1],
-                ProgramAreaSizeKW = (ushort)(response.Data[AREA_DATA_INDEX + 1] | (response.Data[AREA_DATA_INDEX + 0] << 8)),
-                BitAreasSizeKB = response.Data[AREA_DATA_INDEX + 2],
-                DMAreaSizeW = (ushort)(response.Data[AREA_DATA_INDEX + 4] | (response.Data[AREA_DATA_INDEX + 3] << 8)),
-                TimersCount = response.Data[AREA_DATA_INDEX + 5],
-                EMBankCountNonFile = response.Data[AREA_DATA_INDEX + 6],
-                MemoryCardType = response.Data[AREA_DATA_INDEX + 9],
-                MemoryCardSizeKB = (ushort)(response.Data[AREA_DATA_INDEX + 11] | (response.Data[AREA_DATA_INDEX + 10] << 8))
+                DipSwitchStatus = response.Data[CONTROLLER_MODEL_LENGTH + CONTROLLER_VERSION_LENGTH], // reserved memory byte 0
+                EMBankCount = response.Data[CONTROLLER_MODEL_LENGTH + CONTROLLER_VERSION_LENGTH + 1], // reserved memory byte 1
+                ProgramAreaSizeKW = (ushort)(response.Data[AREA_DATA_INDEX + 1] | (response.Data[AREA_DATA_INDEX + 0] << 8)), // byte 0-1
+                BitAreasSizeKB = response.Data[AREA_DATA_INDEX + 2], // byte 2
+                DMAreaSizeKW = (ushort)(response.Data[AREA_DATA_INDEX + 4] | (response.Data[AREA_DATA_INDEX + 3] << 8)), // byte 3-4
+                TimersCount = response.Data[AREA_DATA_INDEX + 5], // byte 5
+                EMBankCountNonFile = response.Data[AREA_DATA_INDEX + 6], // byte 6
+                MemoryCardType = response.Data[AREA_DATA_INDEX + 9], // byte 9
+                MemoryCardSizeKB = (ushort)(response.Data[AREA_DATA_INDEX + 11] | (response.Data[AREA_DATA_INDEX + 10] << 8)) // byte 10-11
             };
         }
 
