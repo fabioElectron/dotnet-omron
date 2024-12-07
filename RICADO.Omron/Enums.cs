@@ -1,6 +1,17 @@
 ﻿namespace RICADO.Omron
 {
     
+
+    public enum ConnectionStatus
+    {
+        Undefined,
+        Initalized,
+        Connected,
+        ConnectionFault,
+        Reconnecting,
+        Disconnected
+    }
+
     public enum PlcTypes
     {
         NJ101,

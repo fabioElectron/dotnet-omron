@@ -1,4 +1,6 @@
 ﻿using System;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using RICADO.Omron.Channels;
@@ -10,14 +12,45 @@ namespace RICADO.Omron
 {
     // TODO: Add Documentation to all Classes, Interfaces, Structs and Enums
 
-    public class OmronPLC : IDisposable
+    public class StatusChangedEventArgs : EventArgs
     {
+        ConnectionStatus ConnectionStatus;
+
+        public StatusChangedEventArgs(ConnectionStatus connectionStatus)
+        {
+            ConnectionStatus = connectionStatus;
+        }
+    }
+
+    public class OmronPLC : IDisposable, INotifyPropertyChanged
+    {
+
+        #region INotifyPropertyChanged implementation
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        protected bool SetProperty<T>(ref T storage, T value, int debounce = 0, [CallerMemberName] String propertyName = null)
+        {
+            if (object.Equals(storage, value)) return false;
+            storage = value;
+            OnPropertyChanged(propertyName);
+            return true;
+        }
+
+        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+        #endregion
+
+        public delegate void StatusChangedHandler(object sender, StatusChangedEventArgs e);
+        public event StatusChangedHandler StatusChanged;
 
         #region Private Fields
 
         private PlcTypes _plcType = PlcTypes.Unknown;
         private bool _isInitialized;
         private bool disposedValue;
+        private ConnectionStatus connectionStatus;
         private readonly object _isInitializedLock = new object();
 
         #endregion
@@ -51,6 +84,15 @@ namespace RICADO.Omron
         #endregion
 
         #region Public Properties
+
+        public ConnectionStatus ConnectionStatus
+        {
+            get => connectionStatus; private set
+            {
+                if (SetProperty(ref connectionStatus, value))
+                    StatusChanged?.Invoke(this, new StatusChangedEventArgs(value));
+            }
+        }
 
         public byte LocalNodeID { get; private set; }
 
@@ -233,14 +275,17 @@ namespace RICADO.Omron
             }
             catch (ObjectDisposedException)
             {
+                ConnectionStatus = ConnectionStatus.Disconnected;
                 throw new OmronException("Failed to Create the Ethernet TCP Communication Channel for Omron PLC '" + RemoteHost + ":" + Port + "' - The underlying Socket Connection has been Closed");
             }
             catch (TimeoutException)
             {
+                ConnectionStatus = ConnectionStatus.Disconnected;
                 throw new OmronException("Failed to Create the Ethernet TCP Communication Channel within the Timeout Period for Omron PLC '" + RemoteHost + ":" + Port + "'");
             }
             catch (System.Net.Sockets.SocketException e)
             {
+                ConnectionStatus = ConnectionStatus.Disconnected;
                 throw new OmronException("Failed to Create the Ethernet TCP Communication Channel for Omron PLC '" + RemoteHost + ":" + Port + "'", e);
             }
 
@@ -251,6 +296,8 @@ namespace RICADO.Omron
             {
                 _isInitialized = true;
             }
+            if (ConnectionStatus != ConnectionStatus.Connected)
+                ConnectionStatus = ConnectionStatus.Initalized;
         }
 
         public Task<ReadBitsResult> ReadBitAsync(ushort address, byte bitIndex, MemoryBitDataType dataType, CancellationToken cancellationToken)
@@ -264,6 +311,7 @@ namespace RICADO.Omron
             {
                 if (_isInitialized == false)
                 {
+                    ConnectionStatus = ConnectionStatus.Disconnected;
                     throw new OmronException("This Omron PLC must be Initialized first before any Requests can be Processed");
                 }
             }
@@ -293,10 +341,21 @@ namespace RICADO.Omron
                 throw new ArgumentOutOfRangeException(nameof(address), "The Address is greater than the Maximum Address for the '" + Enum.GetName(typeof(MemoryBitDataType), dataType) + "' Data Type");
             }
 
-            ReadMemoryAreaBitRequest request = new ReadMemoryAreaBitRequest(this, address, startBitIndex, length, dataType);
+            ReadMemoryAreaBitRequest request = null;
+            ProcessRequestResult requestResult = null;
+            try
+            {
+                request = new ReadMemoryAreaBitRequest(this, address, startBitIndex, length, dataType);
+                requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
+            }
+            catch (Exception)
+            {
+                ConnectionStatus = ConnectionStatus.ConnectionFault;
+                throw;
+            }
+            ConnectionStatus = ConnectionStatus.Connected;
 
-            ProcessRequestResult requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
-
+            if (request == null || requestResult == null) return null;
             return new ReadBitsResult
             {
                 BytesSent = requestResult.BytesSent,
@@ -320,6 +379,7 @@ namespace RICADO.Omron
             {
                 if (_isInitialized == false)
                 {
+                    ConnectionStatus = ConnectionStatus.Disconnected;
                     throw new OmronException("This Omron PLC must be Initialized first before any Requests can be Processed");
                 }
             }
@@ -345,10 +405,21 @@ namespace RICADO.Omron
             }
             #endregion
 
-            ReadMemoryAreaWordRequest request = new ReadMemoryAreaWordRequest(this, startAddress, length, dataType);
+            ReadMemoryAreaWordRequest request = null;
+            ProcessRequestResult requestResult = null;
+            try
+            {
+                request = new ReadMemoryAreaWordRequest(this, startAddress, length, dataType);
+                requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
+            }
+            catch (Exception)
+            {
+                ConnectionStatus = ConnectionStatus.ConnectionFault;
+                throw;
+            }
+            ConnectionStatus = ConnectionStatus.Connected;
 
-            ProcessRequestResult requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
-
+            if (request == null || requestResult == null) return null;
             return new ReadWordsResult
             {
                 BytesSent = requestResult.BytesSent,
@@ -373,6 +444,7 @@ namespace RICADO.Omron
             {
                 if (_isInitialized == false)
                 {
+                    ConnectionStatus = ConnectionStatus.Disconnected;
                     throw new OmronException("This Omron PLC must be Initialized first before any Requests can be Processed");
                 }
             }
@@ -402,12 +474,23 @@ namespace RICADO.Omron
                 throw new ArgumentOutOfRangeException(nameof(address), "The Address is greater than the Maximum Address for the '" + Enum.GetName(typeof(MemoryBitDataType), dataType) + "' Data Type");
             }
 
-            WriteMemoryAreaBitRequest request = new WriteMemoryAreaBitRequest(this, address, startBitIndex, dataType, values);
-
-            ProcessRequestResult requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
+            WriteMemoryAreaBitRequest request = null;
+            ProcessRequestResult requestResult = null;
+            try
+            {
+                request = new WriteMemoryAreaBitRequest(this, address, startBitIndex, dataType, values);
+                requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
+            }
+            catch (Exception)
+            {
+                ConnectionStatus = ConnectionStatus.ConnectionFault;
+                throw;
+            }
 
             WriteMemoryAreaBitResponse.Validate(request, requestResult.Response);
+            ConnectionStatus = ConnectionStatus.Connected;
 
+            if (request == null || requestResult == null) return null;
             return new WriteBitsResult
             {
                 BytesSent = requestResult.BytesSent,
@@ -430,6 +513,7 @@ namespace RICADO.Omron
             {
                 if (_isInitialized == false)
                 {
+                    ConnectionStatus = ConnectionStatus.Disconnected;
                     throw new OmronException("This Omron PLC must be Initialized first before any Requests can be Processed");
                 }
             }
@@ -455,10 +539,21 @@ namespace RICADO.Omron
             }
             #endregion
 
-            WriteMemoryAreaWordRequest request = new WriteMemoryAreaWordRequest(this, startAddress, dataType, values);
+            WriteMemoryAreaWordRequest request = null;
+            ProcessRequestResult requestResult = null;
+            try
+            {
+                request = new WriteMemoryAreaWordRequest(this, startAddress, dataType, values);
+                requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
+            }
+            catch (Exception)
+            {
+                ConnectionStatus = ConnectionStatus.ConnectionFault;
+                throw;
+            }
+            ConnectionStatus = ConnectionStatus.Connected;
 
-            ProcessRequestResult requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
-
+            if (request == null || requestResult == null) return null;
             WriteMemoryAreaWordResponse.Validate(request, requestResult.Response);
 
             return new WriteWordsResult
@@ -479,16 +574,27 @@ namespace RICADO.Omron
             {
                 if (_isInitialized == false)
                 {
+                    ConnectionStatus = ConnectionStatus.Disconnected;
                     throw new OmronException("This Omron PLC must be Initialized first before any Requests can be Processed");
                 }
             }
 
             ReadClockRequest request = new ReadClockRequest(this);
+            ProcessRequestResult requestResult = null;
+            ClockResult result = null;
+            try
+            {
+                requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
+                result = ReadClockResponse.ExtractClock(request, requestResult.Response);
+            }
+            catch (Exception)
+            {
+                ConnectionStatus = ConnectionStatus.ConnectionFault;
+                throw;
+            }
+            ConnectionStatus = ConnectionStatus.Connected;
 
-            ProcessRequestResult requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
-
-            ClockResult result = ReadClockResponse.ExtractClock(request, requestResult.Response);
-
+            if (result == null || requestResult == null) return null;
             return new ReadClockResult
             {
                 BytesSent = requestResult.BytesSent,
@@ -512,6 +618,7 @@ namespace RICADO.Omron
             {
                 if (_isInitialized == false)
                 {
+                    ConnectionStatus = ConnectionStatus.Disconnected;
                     throw new OmronException("This Omron PLC must be Initialized first before any Requests can be Processed");
                 }
             }
@@ -540,12 +647,23 @@ namespace RICADO.Omron
                 throw new ArgumentOutOfRangeException(nameof(newDayOfWeek), "The Day of Week Value cannot be greater than 6");
             }
 
-            WriteClockRequest request = new WriteClockRequest(this, newDateTime, (byte)newDayOfWeek);
-
-            ProcessRequestResult requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
+            WriteClockRequest request = null;
+            ProcessRequestResult requestResult = null;
+            try
+            {
+                request = new WriteClockRequest(this, newDateTime, (byte)newDayOfWeek);
+                requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
+            }
+            catch (Exception)
+            {
+                ConnectionStatus = ConnectionStatus.ConnectionFault;
+                throw;
+            }
 
             WriteClockResponse.Validate(request, requestResult.Response);
+            ConnectionStatus = ConnectionStatus.Connected;
 
+            if (requestResult == null) return null;
             return new WriteClockResult
             {
                 BytesSent = requestResult.BytesSent,
@@ -562,6 +680,7 @@ namespace RICADO.Omron
             {
                 if (_isInitialized == false)
                 {
+                    ConnectionStatus = ConnectionStatus.Disconnected;
                     throw new OmronException("This Omron PLC must be Initialized first before any Requests can be Processed");
                 }
             }
@@ -572,11 +691,21 @@ namespace RICADO.Omron
             }
 
             ReadCycleTimeRequest request = new ReadCycleTimeRequest(this);
+            ProcessRequestResult requestResult = null;
+            CycleTimeResult result = null;
+            try
+            {
+                requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
+                result = ReadCycleTimeResponse.ExtractCycleTime(request, requestResult.Response);
+            }
+            catch (Exception)
+            {
+                ConnectionStatus = ConnectionStatus.ConnectionFault;
+                throw;
+            }
+            ConnectionStatus = ConnectionStatus.Connected;
 
-            ProcessRequestResult requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
-
-            CycleTimeResult result = ReadCycleTimeResponse.ExtractCycleTime(request, requestResult.Response);
-
+            if (result == null || requestResult == null) return null;
             return new ReadCycleTimeResult
             {
                 BytesSent = requestResult.BytesSent,
@@ -596,16 +725,27 @@ namespace RICADO.Omron
             {
                 if (_isInitialized == false)
                 {
+                    ConnectionStatus = ConnectionStatus.Disconnected;
                     throw new OmronException("This Omron PLC must be Initialized first before any Requests can be Processed");
                 }
             }
 
             ReadOperatingModeRequest request = new ReadOperatingModeRequest(this);
+            ProcessRequestResult requestResult = null;
+            OperatingModeResult result = null;
+            try
+            {
+                requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
+                result = ReadOperatingModeResponse.ExtractOperatingMode(request, requestResult.Response);
+            }
+            catch (Exception)
+            {
+                ConnectionStatus = ConnectionStatus.ConnectionFault;
+                throw;
+            }
+            ConnectionStatus = ConnectionStatus.Connected;
 
-            ProcessRequestResult requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
-
-            OperatingModeResult result = ReadOperatingModeResponse.ExtractOperatingMode(request, requestResult.Response);
-
+            if (result == null || requestResult == null) return null;
             return new ReadOperatingModeResult
             {
                 BytesSent = requestResult.BytesSent,
@@ -628,14 +768,25 @@ namespace RICADO.Omron
             {
                 if (_isInitialized == false)
                 {
+                    ConnectionStatus = ConnectionStatus.Disconnected;
                     throw new OmronException("This Omron PLC must be Initialized first before any Requests can be Processed");
                 }
             }
 
-            WriteOperatingModeRequest request = new WriteOperatingModeRequest(this, run, monitor);
+            ProcessRequestResult requestResult = null;
+            try
+            {
+                WriteOperatingModeRequest request = new WriteOperatingModeRequest(this, run, monitor);
+                requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
+            }
+            catch (Exception)
+            {
+                ConnectionStatus = ConnectionStatus.ConnectionFault;
+                throw;
+            }
+            ConnectionStatus = ConnectionStatus.Connected;
 
-            ProcessRequestResult requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
-
+            if (requestResult is null) return null;
             return new WriteOperatingModeResponse
             {
                 BytesSent = requestResult.BytesSent,
@@ -668,6 +819,7 @@ namespace RICADO.Omron
 
         private void OmronPLC_NeedReinit(object sender, EventArgs e)
         {
+            ConnectionStatus = ConnectionStatus.ConnectionFault;
             NeedReinit?.Invoke(this, e);
         }
 
@@ -734,74 +886,85 @@ namespace RICADO.Omron
         private async Task RequestControllerInformation(CancellationToken cancellationToken)
         {
             ReadCPUUnitDataRequest request = new ReadCPUUnitDataRequest(this);
-
-            ProcessRequestResult requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
-
-            CPUUnitDataResult result = ReadCPUUnitDataResponse.ExtractData(requestResult.Response);
-
-            if (result.ControllerModel != null && result.ControllerModel.Length > 0)
+            CPUUnitDataResult result = null;
+            try
             {
-                ControllerModel = result.ControllerModel;
-
-                if (ControllerModel.StartsWith("NJ101"))
-                {
-                    _plcType = PlcTypes.NJ101;
-                }
-                else if (ControllerModel.StartsWith("NJ301"))
-                {
-                    _plcType = PlcTypes.NJ301;
-                }
-                else if (ControllerModel.StartsWith("NJ501"))
-                {
-                    _plcType = PlcTypes.NJ501;
-                }
-                else if (ControllerModel.StartsWith("NX1P2"))
-                {
-                    _plcType = PlcTypes.NX1P2;
-                }
-                else if (ControllerModel.StartsWith("NX102"))
-                {
-                    _plcType = PlcTypes.NX102;
-                }
-                else if (ControllerModel.StartsWith("NX701"))
-                {
-                    _plcType = PlcTypes.NX701;
-                }
-                else if (ControllerModel.StartsWith("NJ") || ControllerModel.StartsWith("NX") || ControllerModel.StartsWith("NY"))
-                {
-                    _plcType = PlcTypes.NJ_NX_NY_Series;
-                }
-                else if (ControllerModel.StartsWith("CJ2"))
-                {
-                    _plcType = PlcTypes.CJ2;
-                }
-                else if (ControllerModel.StartsWith("CP1"))
-                {
-                    _plcType = PlcTypes.CP1;
-                }
-                else if (ControllerModel.StartsWith("C"))
-                {
-                    _plcType = PlcTypes.C_Series;
-                }
-                else
-                {
-                    _plcType = PlcTypes.Unknown;
-                }
+                ProcessRequestResult requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
+                result = ReadCPUUnitDataResponse.ExtractData(requestResult.Response);
             }
-
-            if (result.ControllerVersion != null && result.ControllerVersion.Length > 0)
+            catch (Exception)
             {
-                ControllerVersion = result.ControllerVersion;
+                ConnectionStatus = ConnectionStatus.ConnectionFault;
+                throw;
             }
-            DipSwitchStatus = result.DipSwitchStatus;
-            EMBankCount = result.EMBankCount;
-            ProgramAreaSizeKW = result.ProgramAreaSizeKW;
-            BitAreasSizeKB = result.BitAreasSizeKB;
-            DMAreaSizeKW = result.DMAreaSizeKW;
-            TimersCount = result.TimersCount;
-            EMBankCountNonFile = result.EMBankCountNonFile;
-            MemoryCardType = result.MemoryCardType;
-            MemoryCardSizeKB = result.MemoryCardSizeKB;
+            ConnectionStatus = ConnectionStatus.Connected;
+
+            if (result != null)
+            {
+                if (result.ControllerModel != null && result.ControllerModel.Length > 0)
+                {
+                    ControllerModel = result.ControllerModel;
+
+                    if (ControllerModel.StartsWith("NJ101"))
+                    {
+                        _plcType = PlcTypes.NJ101;
+                    }
+                    else if (ControllerModel.StartsWith("NJ301"))
+                    {
+                        _plcType = PlcTypes.NJ301;
+                    }
+                    else if (ControllerModel.StartsWith("NJ501"))
+                    {
+                        _plcType = PlcTypes.NJ501;
+                    }
+                    else if (ControllerModel.StartsWith("NX1P2"))
+                    {
+                        _plcType = PlcTypes.NX1P2;
+                    }
+                    else if (ControllerModel.StartsWith("NX102"))
+                    {
+                        _plcType = PlcTypes.NX102;
+                    }
+                    else if (ControllerModel.StartsWith("NX701"))
+                    {
+                        _plcType = PlcTypes.NX701;
+                    }
+                    else if (ControllerModel.StartsWith("NJ") || ControllerModel.StartsWith("NX") || ControllerModel.StartsWith("NY"))
+                    {
+                        _plcType = PlcTypes.NJ_NX_NY_Series;
+                    }
+                    else if (ControllerModel.StartsWith("CJ2"))
+                    {
+                        _plcType = PlcTypes.CJ2;
+                    }
+                    else if (ControllerModel.StartsWith("CP1"))
+                    {
+                        _plcType = PlcTypes.CP1;
+                    }
+                    else if (ControllerModel.StartsWith("C"))
+                    {
+                        _plcType = PlcTypes.C_Series;
+                    }
+                    else
+                    {
+                        _plcType = PlcTypes.Unknown;
+                    }
+                }
+
+                if (result.ControllerVersion != null && result.ControllerVersion.Length > 0)
+                {
+                    ControllerVersion = result.ControllerVersion;
+                }
+                DipSwitchStatus = result.DipSwitchStatus;
+                EMBankCount = result.EMBankCount;
+                ProgramAreaSizeKW = result.ProgramAreaSizeKW;
+                BitAreasSizeKB = result.BitAreasSizeKB;
+                DMAreaSizeKW = result.DMAreaSizeKW;
+                TimersCount = result.TimersCount;
+                EMBankCountNonFile = result.EMBankCountNonFile;
+                MemoryCardType = result.MemoryCardType;
+                MemoryCardSizeKB = result.MemoryCardSizeKB;
+            }
         }
 
         #endregion
