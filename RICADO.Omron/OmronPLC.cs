@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Net;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -813,6 +814,131 @@ namespace RICADO.Omron
             };
         }
 
+        public async Task<ReadProgramAreaResult> ReadProgramAsync(uint startAddress, ushort byteCount, CancellationToken cancellationToken)
+        {
+            #region checks
+            lock (_isInitializedLock)
+            {
+                if (_isInitialized == false)
+                {
+                    ConnectionStatus = ConnectionStatus.Disconnected;
+                    throw new OmronException("This Omron PLC must be Initialized first before any Requests can be Processed");
+                }
+            }
+
+            if (byteCount == 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(byteCount), "The Length cannot be Zero");
+            }
+
+            if (byteCount > 992)
+            {
+                throw new ArgumentOutOfRangeException(nameof(byteCount), "The Length cannot be greater than 992" + MaximumReadWordLength.ToString());
+            }
+
+            if (startAddress % 4 != 0)
+                throw new FINSException("ReadProgram start address must be a multiple of four");
+            if (byteCount % 4 != 0)
+                throw new FINSException("ReadProgram byte count must be a multiple of four");
+
+            //TODO FB
+            //if (ValidateWordStartAddress(startAddress, length, dataType) == false)
+            //{
+            //    throw new ArgumentOutOfRangeException(nameof(startAddress), "The Start Address and Length combined are greater than the Maximum Address for the '" + Enum.GetName(typeof(MemoryWordDataType), dataType) + "' Data Type");
+            //}
+            #endregion
+
+            ReadProgramAreaRequest request = null;
+            ProcessRequestResult requestResult = null;
+            try
+            {
+                request = new ReadProgramAreaRequest(this, startAddress, byteCount, false);
+                requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
+            }
+            catch (Exception)
+            {
+                ConnectionStatus = ConnectionStatus.ConnectionFault;
+                throw;
+            }
+            ConnectionStatus = ConnectionStatus.Connected;
+
+            if (request == null || requestResult == null) return null;
+            return new ReadProgramAreaResult
+            {
+                BytesSent = requestResult.BytesSent,
+                PacketsSent = requestResult.PacketsSent,
+                BytesReceived = requestResult.BytesReceived,
+                PacketsReceived = requestResult.PacketsReceived,
+                Duration = requestResult.Duration,
+                Values = ReadProgramAreaResponse.ExtractValues(request, requestResult.Response),
+                MainResponseCode = requestResult.Response.MainResponseCode,
+                SubResponseCode = requestResult.Response.SubResponseCode
+            };
+        }
+
+        public async Task<WriteWordsResult> WriteProgramAsync(byte[] values, uint startAddress, CancellationToken cancellationToken)
+        {
+            #region checks
+            lock (_isInitializedLock)
+            {
+                if (_isInitialized == false)
+                {
+                    ConnectionStatus = ConnectionStatus.Disconnected;
+                    throw new OmronException("This Omron PLC must be Initialized first before any Requests can be Processed");
+                }
+            }
+
+            if (values.Length == 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(values), "The Values Array cannot be Empty");
+            }
+
+            if (startAddress % 4 != 0)
+                throw new FINSException("ReadProgram start address must be a multiple of four");
+            if (values.Length % 4 != 0)
+                throw new FINSException("ReadProgram byte count must be a multiple of four");
+
+            if (values.Length > 996)
+            {
+                throw new ArgumentOutOfRangeException(nameof(values), "The Values Array Length cannot be greater than 996");
+            }
+
+            //TODO FB
+            //if (ValidateWordStartAddress(startAddress, values.Length, dataType) == false)
+            //{
+            //    throw new ArgumentOutOfRangeException(nameof(startAddress), "The Start Address and Values Array Length combined are greater than the Maximum Address for the '" + Enum.GetName(typeof(MemoryWordDataType), dataType) + "' Data Type");
+            //}
+            #endregion
+
+            WriteProgramAreaRequest request = null;
+            ProcessRequestResult requestResult = null;
+            try
+            {
+                request = new WriteProgramAreaRequest(this, startAddress, (ushort)values.Length, values, false);
+                requestResult = await Channel.ProcessRequestAsync(request, Timeout, Retries, cancellationToken);
+            }
+            catch (Exception)
+            {
+                ConnectionStatus = ConnectionStatus.ConnectionFault;
+                throw;
+            }
+            ConnectionStatus = ConnectionStatus.Connected;
+
+            if (request == null || requestResult == null) return null;
+            WriteProgramAreaResponse.Validate(request, requestResult.Response);
+
+            return new WriteWordsResult
+            {
+                BytesSent = requestResult.BytesSent,
+                PacketsSent = requestResult.PacketsSent,
+                BytesReceived = requestResult.BytesReceived,
+                PacketsReceived = requestResult.PacketsReceived,
+                Duration = requestResult.Duration,
+                MainResponseCode = requestResult.Response.MainResponseCode,
+                SubResponseCode = requestResult.Response.SubResponseCode
+            };
+        }
+
         #endregion
 
         #region Private Methods
@@ -967,6 +1093,7 @@ namespace RICADO.Omron
             }
         }
 
+        
         #endregion
 
     }
