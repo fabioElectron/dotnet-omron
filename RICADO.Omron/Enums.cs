@@ -169,4 +169,24 @@
         ConvertToModbusASCIICommand = 0x05,
     }
 
+    public enum EndCode : byte
+    {
+        NormalCompletion = 0x00,
+        LocalNodeError = 0x01,
+        ControllerError = 0x03,
+        ServiceNotSupported = 0x04,
+        RoutingTableError = 0x05,
+        CommandFormatError = 0x10,
+        ParameterError = 0x11,
+        ReadNotPossinle = 0x20,
+        WriteNotPossible = 0x21,
+        NotExecutableInCurrentMode = 0x22,
+        NoSuchDevice = 0x23,
+        CannotStartOrStop = 0x24,
+        UnitError = 0x25,
+        CommandError = 0x26,
+        AccessRightError = 0x30,
+        Abort = 0x40
+    }
+
 }
